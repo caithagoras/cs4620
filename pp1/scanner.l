@@ -29,13 +29,8 @@ EXPONENT [Ee][\+\-]?{DIGIT}+
 %s comment
 
 %%
-<comment>{
-\*\/		BEGIN(0);
-[^\*\n+]+|\*
-\n
-}
-\/\/(.*)	/* Discard one -line comment */
-\/\*		BEGIN(comment);
+\/\/(.*)				/* One-line comment */
+\/\*([^\*\n+]+|\*|\n)*\*\/		/* Multi-line comment */
 void		return T_Void;
 int		return T_Int;
 double		return T_Double;
@@ -79,6 +74,12 @@ NewArray	return T_NewArray;
 \)		return ')';
 \{		return '{';
 \}		return '}';
+\"[^\"\n]*\n				{
+					  char str[strlen(yytext)];
+					  strncpy(str,yytext,strlen(yytext)-1);
+					  str[strlen(yytext)-1]='\0';
+					  ReportError::UntermString(&yylloc,str);
+					}
 \"[^\"\n]*\"				{
 					  yylval.stringConstant=strdup(yytext);
 					  stringLiterals.Append(yylval.stringConstant);
@@ -91,6 +92,7 @@ true|false				yylval.boolConstant=strcmp(yytext,"true")==0?true:false; return T_
 					  if (strlen(yytext)>31){
 					    ReportError::LongIdentifier(&yylloc,yytext);
 					    strncpy(yylval.identifier,yytext,31);
+					    yylval.identifier[31]='\0';
 					  }
 					  else
 					    strcpy(yylval.identifier,yytext);
@@ -127,13 +129,13 @@ void InitScanner() {
 static void DoBeforeEachAction() {
   yylloc.first_line = num_row;
   yylloc.first_column = num_col;
-  if (strlen(yytext) == 1 && yytext[0] == '\n') {
-    num_row++;
-    num_col = 1;
+  for (int i=0;i<strlen(yytext);i++){
+    if (yytext[i]=='\n'){
+      num_row++;
+      num_col=1;
+    }
+    else num_col++;
   }
-  else
-    num_col += strlen(yytext);
-
   yylloc.last_line = num_row;
   yylloc.last_column = num_col-1;
 }
