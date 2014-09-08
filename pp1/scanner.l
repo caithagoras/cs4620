@@ -24,9 +24,18 @@ static void DoBeforeEachAction();
 DIGIT [0-9]
 HEXDIGIT [0-9A-Fa-f]
 ALPHABET [A-Za-z]
-EXPONENT [Ee][\x2b\x2d]?{DIGIT}+
+EXPONENT [Ee][\+\-]?{DIGIT}+
+
+%s comment
 
 %%
+<comment>{
+\*\/		BEGIN(0);
+[^\*\n+]+|\*
+\n
+}
+\/\/(.*)	/* Discard one -line comment */
+\/\*		BEGIN(comment);
 void		return T_Void;
 int		return T_Int;
 double		return T_Double;
@@ -46,41 +55,49 @@ return		return T_Return;
 break		return T_Break;
 New		return T_New;
 NewArray	return T_NewArray;
-\x2b		return '+';
-\x2d		return '-';
-\x2a		return '*';
-\x2f		return '/';
-\x25		return '%';
-\x3c		return '<';
-\x3c\x3d	return T_LessEqual;
-\x3e		return '>';
-\x3e\x3d	return T_GreaterEqual;
-\x3d		return '=';
-\x3d\x3d	return T_Equal;
-\x21\x3d	return T_NotEqual;
-\x26\x26	return T_And;
-\x7c\x7c	return T_Or;
-\x21		return '!';
-\x3b		return ';';
-\x2c		return ',';
-\x2e		return '.';
-\x5b		return '[';
-\x5d		return ']';
-\x28		return '(';
-\x29		return ')';
-\x7b		return '{';
-\x7d		return '}';
+\+		return '+';
+-		return '-';
+\*		return '*';
+\/		return '/';
+%		return '%';
+\<		return '<';
+\<=		return T_LessEqual;
+>		return '>';
+>=		return T_GreaterEqual;
+=		return '=';
+==		return T_Equal;
+!=		return T_NotEqual;
+&&		return T_And;
+\|\|		return T_Or;
+!		return '!';
+;		return ';';
+,		return ',';
+\.		return '.';
+\[		return '[';
+\]		return ']';
+\(		return '(';
+\)		return ')';
+\{		return '{';
+\}		return '}';
 \"[^\"\n]*\"				{
-  yylval.stringConstant=(char*)malloc(sizeof(char)*(strlen(yytext)+1));
-  strcpy(yylval.stringConstant,yytext);
-  stringLiterals.Append(yylval.stringConstant);
-  return T_StringConstant;
-}
+					  yylval.stringConstant=strdup(yytext);
+					  stringLiterals.Append(yylval.stringConstant);
+					  return T_StringConstant;
+					}
 ({DIGIT}+)|((0x|0X){HEXDIGIT}+)		sscanf(yytext,"%i",&yylval.integerConstant); return T_IntConstant;
-{DIGIT}+\x2e{DIGIT}*{EXPONENT}?		sscanf(yytext,"%lf",&yylval.doubleConstant); return T_DoubleConstant;
+{DIGIT}+\.{DIGIT}*{EXPONENT}?		sscanf(yytext,"%lf",&yylval.doubleConstant); return T_DoubleConstant;
 true|false				yylval.boolConstant=strcmp(yytext,"true")==0?true:false; return T_BoolConstant;
-{ALPHABET}({ALPHABET}|{DIGIT}|\x5f)*	strcpy(yylval.identifier,yytext); return T_Identifier;
+{ALPHABET}({ALPHABET}|{DIGIT}|_)*	{
+					  if (strlen(yytext)>31){
+					    ReportError::LongIdentifier(&yylloc,yytext);
+					    strncpy(yylval.identifier,yytext,31);
+					  }
+					  else
+					    strcpy(yylval.identifier,yytext);
+					  return T_Identifier;
+					}
 [ \t\n]
+.					ReportError::UnrecogChar(&yylloc,yytext[0]);
 
 %%
 
