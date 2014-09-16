@@ -14,3 +14,5 @@ do
     ./dcc < "samples/$file.decaf" &> cpr
     diff -s cpr "samples/$file.out"
 done
+
+rm -f cpr

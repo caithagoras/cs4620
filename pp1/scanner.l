@@ -81,8 +81,7 @@ NewArray	return T_NewArray;
 					  ReportError::UntermString(&yylloc,str);
 					}
 \"[^\"\n]*\"				{
-					  yylval.stringConstant=strdup(yytext);
-					  stringLiterals.Append(yylval.stringConstant);
+					  yylval.stringConstant=yytext;
 					  return T_StringConstant;
 					}
 ({DIGIT}+)|((0x|0X){HEXDIGIT}+)		sscanf(yytext,"%i",&yylval.integerConstant); return T_IntConstant;
