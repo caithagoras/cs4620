@@ -1,0 +1,31 @@
+/*
+ * This program reads in a non-negative integer n, and then n lines of string. It sorts the string
+ * in lexicographic order and print them out line by line.
+ */
+
+int n;
+
+void main(){
+  int i;
+  int j;
+  string[] v;
+
+  int n;
+  n=ReadInteger();
+  v=NewArray(n,int);
+
+  for (i=0;i<n;i++)
+    v[i]=ReadLine();
+
+  for (i=0;i<n-1;i++)
+    for (int j=i+1;j<n;j++)
+      if (v[i]>=v[j]){
+	string temp;
+	temp=v[i];
+	v[i]=v[j];
+	v[j]=temp;
+      }
+  
+  for (i=0;i<n;i++)
+    print(v[i],"\n");
+}

@@ -1,0 +1,48 @@
+/*
+ * This decaf program defines a simple disjoint-set data structure
+ */
+
+class disjoint_set{
+  int[] parent;
+
+  /*
+   * Initialize a disjoint_set with n elements
+   */
+  void init(int n){
+    int i;
+    parent=NewArray(n,type);
+    for (i=0;i<n;i++){
+      parent[i]=i;
+    }
+  }
+
+  /*
+   * Make element x in its own set.
+   */
+  void makeset(int x){
+    parent[x]=x;
+  }
+
+  /*
+   * Returns the root of x (subset which x belongs to).
+   */
+  int find(int x){
+    int root;
+    root=x;
+    while (parent[root]!=root)
+      root=parent[root];
+    return root;
+  }
+
+  /*
+   * Join the subset in which x belongs to and the subset in which y belongs.
+   */
+  void union(int x,int y){
+    int xroot;
+    int yroot;
+    xroot=find(x);
+    yroot=find(y);
+    if (xroot!=yroot)
+      parnet[xroot]=yroot;
+  }
+}
