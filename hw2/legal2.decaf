@@ -11,7 +11,7 @@ class disjoint_set{
   void init(int n){
     int i;
     parent=NewArray(n,type);
-    for (i=0;i<n;i++){
+    for (i=0;i<n;i=i+1){
       parent[i]=i;
     }
   }

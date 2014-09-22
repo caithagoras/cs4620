@@ -1,0 +1,49 @@
+/*
+ * Derived from legal2.decaf with the folloing syntax errors:
+ * 1. Line 16: Decaf does not allow declaring loop control variables in the for statement.
+ * 2. Line 17: The 2nd expression in the parenthese of a for statement cannot be empty.
+ * 3. Line 25: Stmt cannot be used as StmtBlock for member function makeset(int).
+ * 4. Line 31: Assignment expression cannot appear in VariableDecl.
+ * 5. Line 43: Declaring multiple variables in one single statement is not supported by Decaf.
+ */
+
+class disjoint_set{
+  int[] parent;
+
+  /*
+   * Initialize a disjoint_set with n elements
+   */
+  void init(int n){
+    parent=NewArray(n,type);
+    for (int i=0;;i=i+1){
+      parent[i]=i;
+    }
+  }
+
+  /*
+   * Make element x in its own set.
+   */
+  void makeset(int x)
+    parent[x]=x;
+
+  /*
+   * Returns the root of x (subset which x belongs to).
+   */
+  int find(int x){
+    int root=x;
+    while (parent[root]!=root)
+      root=parent[root];
+    return root;
+  }
+
+  /*
+   * Join the subset in which x belongs to and the subset in which y belongs.
+   */
+  void union(int x,int y){
+    int xroot,yroot;
+    xroot=find(x);
+    yroot=find(y);
+    if (xroot!=yroot)
+      parnet[xroot]=yroot;
+  }
+}

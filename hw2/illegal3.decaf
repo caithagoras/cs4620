@@ -1,0 +1,36 @@
+/*
+ * Derived from legal3.decaf with the folloing syntax errors:
+ * 1. Line 11: [] should follow type(string) rather than ident(v).
+ * 2. Line 16: Type is not specified for NewArray.
+ * 3. Line 19: i++ is not accpected as a valid expression in Decaf.
+ * 4. Line 22: i++ is not accpected as a valid expression in Decaf.
+ * 5. Line 23: j++ is not accpected as a valid expression in Decaf.
+ * 6. Line 35: i++ is not accpected as a valid expression in Decaf.
+ */
+
+int n;
+
+void main(){
+  int i;
+  int j;
+  string v[];
+
+  int n;
+  n=ReadInteger();
+  v=NewArray(n);
+
+  for (i=0;i<n;i++)
+    v[i]=ReadLine();
+
+  for (i=0;i<n-1;i++)
+    for (int j=i+1;j<n;j++)
+      if (v[i]>=v[j]){
+	string temp;
+	temp=v[i];
+	v[i]=v[j];
+	v[j]=temp;
+      }
+  
+  for (i=0;i<n;i++)
+    print(v[i],"\n");
+}
