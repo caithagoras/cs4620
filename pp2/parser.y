@@ -49,9 +49,11 @@ void yyerror(const char *msg); // standard error-handling routine
     FnDecl *fDecl;
     Type *type;
     Stmt *stmt;
+    Expr *expr;
     List<Stmt*> *stmtList;
     List<VarDecl*> *varList;
     List<Decl*> *declList;
+    List<Expr*> *exprList;
 }
 
 
@@ -92,7 +94,11 @@ void yyerror(const char *msg); // standard error-handling routine
 %type <varList>   Formals FormalList VarDecls
 %type <fDecl>     FnDecl FnHeader
 %type <stmtList>  StmtList
-%type <stmt>      StmtBlock
+%type <stmt>      StmtBlock Stmt IfStmt WhileStmt ForStmt BreakStmt ReturnStmt PrintStmt
+%type <exprList>  ExprList
+%type <expr>      Expr LValue Call Actuals Constant
+
+%right PREC_THEN T_ELSE
 %%
 /* Rules
  * -----
@@ -112,17 +118,17 @@ Program   :    DeclList            {
                                     }
           ;
 
-DeclList  :    DeclList Decl        { ($$=$1)->Append($2); }
-          |    Decl                 { ($$ = new List<Decl*>)->Append($1); };
+DeclList  :    DeclList Decl        { ($$ = $1) -> Append($2); }
+          |    Decl                 { ($$ = new List<Decl*>) -> Append($1); };
 
-Decl      :    VarDecl              { $$=$1; }
-          |    FnDecl               { $$=$1; }
+Decl      :    VarDecl              { $$ = $1; }
+          |    FnDecl               { $$ = $1; }
 ;
 
-VarDecl   :    Variable ';'         { $$=$1; }
+VarDecl   :    Variable ';'         { $$ = $1; }
 ; 
 
-Variable   :   Type T_Identifier    { $$ = new VarDecl(new Identifier(@2, $2), $1); }
+Variable  :   Type T_Identifier     { $$ = new VarDecl(new Identifier(@2, $2), $1); }
 ;
 
 Type      :    T_Int                { $$ = Type::intType; }
@@ -133,7 +139,7 @@ Type      :    T_Int                { $$ = Type::intType; }
           |    Type T_Dims          { $$ = new ArrayType(Join(@1, @2), $1); }
 ;
 
-FnDecl    :    FnHeader StmtBlock   { ($$=$1)->SetFunctionBody($2); }
+FnDecl    :    FnHeader StmtBlock   { ($$ = $1) -> SetFunctionBody($2); }
 ;
 
 FnHeader  :    Type T_Identifier '(' Formals ')'  
@@ -147,7 +153,7 @@ Formals   :    FormalList           { $$ = $1; }
 ;
 
 FormalList:    FormalList ',' Variable  
-                                    { ($$=$1)->Append($3); }
+                                    { ($$ = $1) -> Append($3); }
           |    Variable             { ($$ = new List<VarDecl*>)->Append($1); }
 ;
 
@@ -155,11 +161,117 @@ StmtBlock :    '{' VarDecls StmtList '}'
                                     { $$ = new StmtBlock($2, $3); }
 ;
 
-VarDecls  : VarDecls VarDecl     { ($$=$1)->Append($2); }
-          | /* empty*/           { $$ = new List<VarDecl*>; }
+VarDecls  :    VarDecls VarDecl     { ($$ = $1) -> Append($2); }
+          |    /* empty*/           { $$ = new List<VarDecl*>; }
 ;
 
-StmtList  : /* empty, add your grammar */  { $$ = new List<Stmt*>; }
+StmtList  :    StmtList Stmt        { ($$ = $1) -> Append($2); }
+	  |    /* empty */          { $$ = new List<Stmt*>; }
+;
+
+Stmt      :    Expr ';'             { $$ = $1; }
+          |    ';'                  { $$ = new EmptyExpr; }
+          |    IfStmt               { $$ = $1; }
+          |    WhileStmt            { $$ = $1; }
+          |    ForStmt              { $$ = $1; }
+          |    BreakStmt            { $$ = $1; }
+          |    ReturnStmt           { $$ = $1; }
+          |    PrintStmt            { $$ = $1; }
+          |    StmtBlock            { $$ = $1; }
+;
+
+
+IfStmt    : T_If '(' Expr ')' Stmt  %prec PREC_THEN
+                                    { $$ = new IfStmt($3, $5, new EmptyExpr); }
+          | T_If '(' Expr ')' Stmt T_Else Stmt
+                                    { $$ = new IfStmt($3, $5, $7); }
+;
+
+WhileStmt :    T_While '(' Expr ')' Stmt
+                                    { $$ = new WhileStmt($3, $5); }
+;
+
+ForStmt   :    T_For '(' Expr ';' Expr ';' Expr ')' Stmt
+                                    { $$ = new ForStmt($3, $5, $7, $9); }
+          |    T_For '(' Expr ';' Expr ';' ')' Stmt
+                                    { $$ = new ForStmt($3, $5, new EmptyExpr, $8); }
+          |    T_For '(' ';' Expr ';' Expr ')' Stmt
+                                    { $$ = new ForStmt(new EmptyExpr, $4, $6, $8); }
+          |    T_For '(' ';' Expr ';' ')' Stmt
+                                    { $$ = new ForStmt(new EmptyExpr, $4, new EmptyExpr, $7); }
+;
+
+BreakStmt :    T_Break ';'          { $$ = new BreakStmt(yylloc); }
+;
+
+ReturnStmt:    T_Return Expr ';'    { $$ = new ReturnStmt(yylloc, $2); }
+          |    T_Return ';'         { $$ = new ReturnStmt(yylloc, new EmptyExpr); }
+;
+
+PrintStmt :    T_Print '(' ExprList ')' ';'
+                                    { $$ = new PrintStmt($3); }
+;
+
+ExprList  :    ExprList ',' Expr    { $$ = new List<Expr*>; }
+          |    Expr                 { ($$ = new List<Expr*>) -> Append($1); }
+;
+
+Expr      :    LValue '=' Expr      { $$ = new AssignExpr($1, $2, $3); }
+          |    Constant             { $$ = $1; }
+          |    LValue               { $$ = $1; }
+          |    T_This               { $$ = new This(yylloc); }
+          |    Call                 { $$ = $1; }
+          |    '(' Expr ')'         { $$ = $2; }
+          |    Expr '+' Expr        { $$ = new ArithmeticExpr($1, $2, $3); }
+          |    Expr '-' Expr        { $$ = new ArithmeticExpr($1, $2, $3); }
+          |    Expr '*' Expr        { $$ = new ArithmeticExpr($1, $2, $3); }
+          |    Expr '/' Expr        { $$ = new ArithmeticExpr($1, $2, $3); }
+          |    Expr '%' Expr        { $$ = new ArithmeticExpr($1, $2, $3); }
+          |    '-' Expr             { $$ = new ArithmeticExpr(NULL, $1, $2); }
+          |    Expr '<' Expr        { $$ = new RelationalExpr($1, $2, $3); }
+          |    Expr T_LessEqual Expr
+                                    { $$ = new RelationalExpr($1, $2, $3); }
+          |    Expr '>' Expr        { $$ = new RelationalExpr($1, $2, $3); }
+          |    Expr T_GreaterEqual Expr
+                                    { $$ = new RelationalExpr($1, $2, $3); }
+          |    Expr T_Equal Expr    { $$ = new EqualityExpr($1, $2, $3); }
+          |    Expr T_NotEqual Expr { $$ = new EqualityExpr($1, $2, $3); }
+          |    Expr T_And Expr      { $$ = new LogicalExpr($1, $2, $3); }
+          |    Expr T_Or Expr       { $$ = new LogicalExpr($1, $2, $3); }
+          |    '!' Expr
+                                    { $$ = new LogicalExpr(NULL, $1, $2); }
+          |    T_ReadInteger '(' ')'
+                                    { $$ = new ReadIntegerExpr(yylloc); }
+          |    T_ReadLine '(' ')'   { $$ = new ReadLineExpr(yylloc); }
+          |    T_New '(' T_Identifier ')'
+                                    { $$ = new NewExpr(new NameType(new Identifier(yylloc, $3))); }
+          |    T_NewArray '(' Expr ',' Type ')'
+                                    { $$ = new ArrayExpr(yylloc, $3, $5); }
+;
+
+LValue    :    T_Identifier
+                                    { $$ = new FieldAccess(NULL, new Identifier(yylloc, $1)); }
+          |    Expr '.' T_Identifier
+                                    { $$ = new FieldAccess($1, new Identifier(yylloc, $1)); }
+          |    Expr '[' T_Identifier ']'
+                                    { $$ = new ArrayAccess($1, new Identifier(yylloc, $1)); }
+;
+
+Call      :    T_Identifier '(' Actuals ')'
+                                    { $$ = new Call(yylloc, NULL, new Identifier(yylloc, $1), $3); }
+          |    Expr '.' T_Identifier '(' Actuals ')'
+                                    { $$ = new Call(yylloc, $1, new Identifier(yylloc, $3), $5); }
+;
+
+Actuals   :    ExprList             { $$ = $1; }
+          |    /* empty */          { $$ = new List<Expr*>; }
+;
+
+Constant  :    T_IntConstant        { $$ = new IntConstant(yylloc, $1); }
+          |    T_DoubleConstant     { $$ = new DoubleConstant(yylloc, $1); }
+          |    T_StringConstant     { $$ = new StringConstant(yylloc, $1); }
+          |    T_BoolConstant       { $$ = new BoolConstant(yylloc, $1); }
+          |    T_Null               { $$ = new NullConstant(yylloc); }
 ;
 
 %%
