@@ -47,6 +47,17 @@ void Operator::PrintChildren(int indentLevel) {
     printf("%s",tokenString);
 }
 
+PostfixExpr::PostfixExpr(Expr *b, Operator *o)
+  : Expr(Join(b->GetLocation(), o->GetLocation())){
+  (base=b)->SetParent(this);
+  (op=o)->SetParent(this);
+}
+
+void PostfixExpr::PrintChildren(int indentLevel) {
+  base->Print(indentLevel+1);
+  op->Print(indentLevel+1);
+}
+
 CompoundExpr::CompoundExpr(Expr *l, Operator *o, Expr *r) 
   : Expr(Join(l->GetLocation(), r->GetLocation())) {
     Assert(l != NULL && o != NULL && r != NULL);

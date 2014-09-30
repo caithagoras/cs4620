@@ -17,7 +17,6 @@
 class NamedType; // for new
 class Type; // for NewArray
 
-
 class Expr : public Stmt 
 {
   public:
@@ -95,7 +94,18 @@ class Operator : public Node
     const char *GetPrintNameForNode() { return "Operator"; }
     void PrintChildren(int indentLevel);
  };
- 
+
+class PostfixExpr : public Expr {
+ protected:
+  Expr *base;
+  Operator *op;
+
+ public:
+  PostfixExpr(Expr *base, Operator *op);
+  const char *GetPrintNameForNode() { return "PostfixExpr"; }
+  void PrintChildren(int indentLevel);
+};
+
 class CompoundExpr : public Expr
 {
   protected:

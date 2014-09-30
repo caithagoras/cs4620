@@ -16,6 +16,7 @@
 #include "list.h"
 #include "ast.h"
 
+class IntConstant;
 class Decl;
 class VarDecl;
 class Expr;
@@ -49,7 +50,6 @@ class StmtBlock : public Stmt
     const char *GetPrintNameForNode() { return "StmtBlock"; }
     void PrintChildren(int indentLevel);
 };
-
   
 class ConditionalStmt : public Stmt
 {
@@ -127,5 +127,26 @@ class PrintStmt : public Stmt
     void PrintChildren(int indentLevel);
 };
 
+class Case: public Stmt {
+ protected:
+  IntConstant *label; // NULL for default case
+  List<Stmt*> *stmts;
+
+ public:
+  Case(IntConstant *label, List<Stmt*> *stmts);
+  const char *GetPrintNameForNode();
+  void PrintChildren(int indentLevel);
+};
+
+class SwitchStmt: public Stmt {
+ protected:
+  Expr *expr;
+  List<Stmt*> *cases;
+  
+ public:
+  SwitchStmt(Expr *expr, List<Stmt*> *cases);
+  const char *GetPrintNameForNode() { return "SwitchStmt"; }
+  void PrintChildren(int indentLevel);
+};
 
 #endif
