@@ -106,14 +106,14 @@ void yyerror(const char *msg); // standard error-handling routine
 %type <nTypeList> Implements IdentList
 %type <nType>     Extends
 
-%left '='
+%nonassoc '='
 %left T_Or
 %left T_And
-%left T_Equal T_NotEqual
-%left '<' '>' T_LessEqual T_GreaterEqual
+%nonassoc T_Equal T_NotEqual
+%nonassoc '<' '>' T_LessEqual T_GreaterEqual
 %left '+' '-'
 %left '*' '/' '%'
-%nonassoc '!' UMINUS
+%nonassoc '!' UMINUS T_Inc T_Dec
 %left '[' '.'
 %right IF_NO_ELSE T_Else
 
