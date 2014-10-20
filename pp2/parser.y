@@ -331,8 +331,8 @@ Implements:    T_Implements IdentList
           |    /* empty */          { $$ = new List<NamedType*>; }
 ;
 
-IdentList :    IdentList T_Identifier
-                                    { ($$ = $1) -> Append(new NamedType(new Identifier(@2, $2))); }
+IdentList :    IdentList ',' T_Identifier
+                                    { ($$ = $1) -> Append(new NamedType(new Identifier(@3, $3))); }
           |    T_Identifier         { ($$ = new List<NamedType*>) -> Append(new NamedType(new Identifier(@1, $1))); }
 ;
 
