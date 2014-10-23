@@ -6,7 +6,7 @@
 #include "ast_type.h"
 #include "ast_decl.h"
 #include "ast_expr.h"
-
+#include "semantic.h"
 
 Program::Program(List<Decl*> *d) {
     Assert(d != NULL);
@@ -14,13 +14,8 @@ Program::Program(List<Decl*> *d) {
 }
 
 void Program::Check() {
-    /* pp3: here is where the semantic analyzer is kicked off.
-     *      The general idea is perform a tree traversal of the
-     *      entire program, examining all constructs for compliance
-     *      with the semantic rules.  Each node can have its own way of
-     *      checking itself, which makes for a great use of inheritance
-     *      and polymorphism in the node classes.
-     */
+  Semantic semantic(this);
+  semantic.analyze();
 }
 
 StmtBlock::StmtBlock(List<VarDecl*> *d, List<Stmt*> *s) {

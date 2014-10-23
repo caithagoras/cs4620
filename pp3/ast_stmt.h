@@ -20,79 +20,79 @@ class Decl;
 class VarDecl;
 class Expr;
   
-class Program : public Node
-{
-  protected:
-     List<Decl*> *decls;
-     
-  public:
-     Program(List<Decl*> *declList);
-     void Check();
+class Program : public Node{
+ protected:
+  List<Decl*> *decls;
+  friend class Semantic;
+  
+ public:
+  Program(List<Decl*> *declList);
+  void Check();
 };
 
-class Stmt : public Node
-{
-  public:
-     Stmt() : Node() {}
-     Stmt(yyltype loc) : Node(loc) {}
+class Stmt : public Node {
+ public:
+ Stmt() : Node() {}
+ Stmt(yyltype loc) : Node(loc) {}
+  virtual ~Stmt() {}
 };
 
-class StmtBlock : public Stmt 
-{
-  protected:
-    List<VarDecl*> *decls;
-    List<Stmt*> *stmts;
+class StmtBlock : public Stmt {
+  friend class Semantic;
+
+ protected:
+  List<VarDecl*> *decls;
+  List<Stmt*> *stmts;
     
-  public:
-    StmtBlock(List<VarDecl*> *variableDeclarations, List<Stmt*> *statements);
+ public:
+  StmtBlock(List<VarDecl*> *variableDeclarations, List<Stmt*> *statements);
 };
 
   
-class ConditionalStmt : public Stmt
-{
-  protected:
-    Expr *test;
-    Stmt *body;
+class ConditionalStmt : public Stmt {
   
-  public:
-    ConditionalStmt(Expr *testExpr, Stmt *body);
+ protected:
+  Expr *test;
+  Stmt *body;
+
+ public:
+  ConditionalStmt(Expr *testExpr, Stmt *body);
 };
 
-class LoopStmt : public ConditionalStmt 
-{
-  public:
-    LoopStmt(Expr *testExpr, Stmt *body)
-            : ConditionalStmt(testExpr, body) {}
+class LoopStmt : public ConditionalStmt {
+  friend class Semantic;
+
+ public:
+ LoopStmt(Expr *testExpr, Stmt *body)
+   : ConditionalStmt(testExpr, body) {}
 };
 
-class ForStmt : public LoopStmt 
-{
-  protected:
-    Expr *init, *step;
+class ForStmt : public LoopStmt {
+ protected:
+  Expr *init, *step;
   
-  public:
-    ForStmt(Expr *init, Expr *test, Expr *step, Stmt *body);
+ public:
+  ForStmt(Expr *init, Expr *test, Expr *step, Stmt *body);
 };
 
-class WhileStmt : public LoopStmt 
-{
-  public:
-    WhileStmt(Expr *test, Stmt *body) : LoopStmt(test, body) {}
+class WhileStmt : public LoopStmt {
+ public:
+ WhileStmt(Expr *test, Stmt *body) : LoopStmt(test, body) {}
 };
 
-class IfStmt : public ConditionalStmt 
-{
-  protected:
-    Stmt *elseBody;
+class IfStmt : public ConditionalStmt {
+  friend class Semantic;
   
-  public:
-    IfStmt(Expr *test, Stmt *thenBody, Stmt *elseBody);
+ protected:
+  Stmt *elseBody;
+  
+ public:
+  IfStmt(Expr *test, Stmt *thenBody, Stmt *elseBody);
 };
 
-class BreakStmt : public Stmt 
-{
-  public:
-    BreakStmt(yyltype loc) : Stmt(loc) {}
+class BreakStmt : public Stmt {
+ public:
+ BreakStmt(yyltype loc) : Stmt(loc) {}
 };
 
 class ReturnStmt : public Stmt  

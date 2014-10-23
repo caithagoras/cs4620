@@ -72,7 +72,6 @@ void yyerror(const char *msg); // standard error-handling routine
 %token   T_And T_Or T_Null T_Extends T_This T_Interface T_Implements
 %token   T_While T_For T_If T_Else T_Return T_Break
 %token   T_New T_NewArray T_Print T_ReadInteger T_ReadLine
-%token   T_Inc T_Dec T_Switch T_Case T_Default
 
 %token   <identifier> T_Identifier
 %token   <stringConstant> T_StringConstant 
@@ -97,8 +96,8 @@ void yyerror(const char *msg); // standard error-handling routine
 %type <var>       Variable VarDecl
 %type <varList>   Formals FormalList VarDecls
 %type <fDecl>     FnDecl FnHeader Prototype
-%type <stmtList>  StmtList SwitchBody Cases
-%type <stmt>      StmtBlock Stmt IfStmt WhileStmt ForStmt BreakStmt ReturnStmt PrintStmt SwitchStmt Case Default
+%type <stmtList>  StmtList
+%type <stmt>      StmtBlock Stmt IfStmt WhileStmt ForStmt BreakStmt ReturnStmt PrintStmt
 %type <exprList>  ExprList Actuals
 %type <expr>      Expr LValue Call Constant
 %type <cDecl>     ClassDecl
@@ -113,7 +112,7 @@ void yyerror(const char *msg); // standard error-handling routine
 %nonassoc '<' '>' T_LessEqual T_GreaterEqual
 %left '+' '-'
 %left '*' '/' '%'
-%nonassoc '!' UMINUS T_Inc T_Dec
+%nonassoc '!' UMINUS
 %left '[' '.'
 %right IF_NO_ELSE T_Else
 
@@ -122,17 +121,14 @@ void yyerror(const char *msg); // standard error-handling routine
  * -----
  * All productions and actions should be placed between the start and stop
  * %% markers which delimit the Rules section.
-	 
+         
  */
 Program   :    DeclList            { 
-                                      @1; 
-                                      /* pp2: The @1 is needed to convince 
-                                       * yacc to set up yylloc. You can remove 
-                                       * it once you have other uses of @n*/
+                                      @1;
                                       Program *program = new Program($1);
                                       // if no errors, advance to next phase
                                       if (ReportError::NumErrors() == 0) 
-                                          program->Print(0);
+                                          program->Check(); 
                                     }
           ;
 
@@ -186,7 +182,7 @@ VarDecls  :    VarDecls VarDecl     { ($$ = $1) -> Append($2); }
 ;
 
 StmtList  :    Stmt StmtList        { ($$ = $2) -> InsertAt($1, 0); }
-	  |    /* empty */          { $$ = new List<Stmt*>; }
+          |    /* empty */          { $$ = new List<Stmt*>; }
 ;
 
 Stmt      :    Expr ';'             { $$ = $1; }
@@ -198,27 +194,6 @@ Stmt      :    Expr ';'             { $$ = $1; }
           |    BreakStmt            { $$ = $1; }
           |    ReturnStmt           { $$ = $1; }
           |    PrintStmt            { $$ = $1; }
-          |    SwitchStmt           { $$ = $1; }
-;
-
-SwitchStmt:    T_Switch '(' Expr ')' '{' SwitchBody '}'
-                                    { $$ = new SwitchStmt($3, $6); }
-;
-
-SwitchBody:    Cases Default        { ($$ = $1) -> Append($2); }
-          |    Cases                { $$ = $1; }
-;
-
-Cases     :    Cases Case           { ($$ = $1) -> Append($2); }
-          |    Case                 { ($$ = new List<Stmt*>) -> Append($1); }
-;
-
-Case      :    T_Case T_IntConstant ':' StmtList
-                                    { $$ = new Case(new IntConstant(@2, $2), $4); }
-;
-
-Default   :    T_Default ':' StmtList
-                                    { $$ = new Case(NULL, $3); }
 ;
 
 IfStmt    : T_If '(' Expr ')' Stmt  %prec IF_NO_ELSE
@@ -288,8 +263,6 @@ Expr      :    LValue '=' Expr      { $$ = new AssignExpr($1, new Operator(@2, "
                                     { $$ = new NewExpr(@1, new NamedType(new Identifier(@3, $3))); }
           |    T_NewArray '(' Expr ',' Type ')'
                                     { $$ = new NewArrayExpr(@1, $3, $5); }
-          |    LValue T_Inc         { $$ = new PostfixExpr($1, new Operator(@2, "++")); }
-          |    LValue T_Dec         { $$ = new PostfixExpr($1, new Operator(@2, "--")); }
 ;
 
 LValue    :    T_Identifier

@@ -51,6 +51,7 @@ class Node
 
 class Identifier : public Node 
 {
+  friend class Semantic;
   protected:
     char *name;
     

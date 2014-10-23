@@ -1,0 +1,27 @@
+
+class C extends B{
+        int x;
+        int do(int c){}
+}
+
+class B extends A{
+        int x;
+        int do(){}
+}
+
+class A {
+        int x(){}
+}
+
+
+int a;
+double b;
+
+float f;
+
+int main(int a, int b){
+        a=3+c;
+}
+
+class f{
+}
