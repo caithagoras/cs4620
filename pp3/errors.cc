@@ -104,13 +104,13 @@ void ReportError::IdentifierNotDeclared(Identifier *ident, reasonT whyNeeded) {
     OutputError(ident->GetLocation(), s.str());
 }
 
-void ReportError::IncompatibleOperands(Operator *op, Type *lhs, Type *rhs) {
+void ReportError::IncompatibleOperands(const Operator *op, const Type *lhs, const Type *rhs) {
     stringstream s;
     s << "Incompatible operands: " << lhs << " " << op << " " << rhs;
     OutputError(op->GetLocation(), s.str());
 }
      
-void ReportError::IncompatibleOperand(Operator *op, Type *rhs) {
+void ReportError::IncompatibleOperand(const Operator *op, const Type *rhs) {
     stringstream s;
     s << "Incompatible operand: " << op << " " << rhs;
     OutputError(op->GetLocation(), s.str());
@@ -163,7 +163,7 @@ void ReportError::InaccessibleField(Identifier *field, Type *base) {
     OutputError(field->GetLocation(), s.str());
 }
 
-void ReportError::PrintArgMismatch(Expr *arg, int argIndex, Type *given) {
+void ReportError::PrintArgMismatch(Expr *arg, int argIndex, const Type *given) {
     stringstream s;
     s << "Incompatible argument " << argIndex << ": " << given
         << " given, int/bool/string expected";

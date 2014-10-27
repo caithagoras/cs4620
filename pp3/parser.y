@@ -144,7 +144,7 @@ Decl      :    VarDecl              { $$ = $1; }
 VarDecl   :    Variable ';'         { $$ = $1; }
 ; 
 
-Variable  :    Type T_Identifier     { $$ = new VarDecl(new Identifier(@2, $2), $1); }
+Variable  :    Type T_Identifier    { $$ = new VarDecl(new Identifier(@2, $2), $1); }
 ;
 
 Type      :    T_Int                { $$ = Type::intType; }
@@ -257,12 +257,12 @@ Expr      :    LValue '=' Expr      { $$ = new AssignExpr($1, new Operator(@2, "
           |    Expr T_Or Expr       { $$ = new LogicalExpr($1, new Operator(@2, "||"), $3); }
           |    '!' Expr             { $$ = new LogicalExpr(new Operator(@1, "!"), $2); }
           |    T_ReadInteger '(' ')'
-                                    { $$ = new ReadIntegerExpr(@1); }
-          |    T_ReadLine '(' ')'   { $$ = new ReadLineExpr(@1); }
+                                    { $$ = new ReadIntegerExpr(Join(@1, @3)); }
+          |    T_ReadLine '(' ')'   { $$ = new ReadLineExpr(Join(@1, @3)); }
           |    T_New '(' T_Identifier ')'
-                                    { $$ = new NewExpr(@1, new NamedType(new Identifier(@3, $3))); }
+                                    { $$ = new NewExpr(Join(@1, @4), new NamedType(new Identifier(@3, $3))); }
           |    T_NewArray '(' Expr ',' Type ')'
-                                    { $$ = new NewArrayExpr(@1, $3, $5); }
+                                    { $$ = new NewArrayExpr(Join(@1, @6), $3, $5); }
 ;
 
 LValue    :    T_Identifier
@@ -270,13 +270,13 @@ LValue    :    T_Identifier
           |    Expr '.' T_Identifier
                                     { $$ = new FieldAccess($1, new Identifier(@3, $3)); }
           |    Expr '[' Expr ']'
-                                    { $$ = new ArrayAccess(@1, $1, $3); }
+                                    { $$ = new ArrayAccess(Join(@1, @4), $1, $3); }
 ;
 
 Call      :    T_Identifier '(' Actuals ')'
-                                    { $$ = new Call(@1, NULL, new Identifier(@1, $1), $3); }
+                                    { $$ = new Call(Join(@1, @4), NULL, new Identifier(@1, $1), $3); }
           |    Expr '.' T_Identifier '(' Actuals ')'
-                                    { $$ = new Call(@1, $1, new Identifier(@3, $3), $5); }
+                                    { $$ = new Call(Join(@1, @6), $1, new Identifier(@3, $3), $5); }
 ;
 
 Actuals   :    ExprList             { $$ = $1; }
@@ -319,7 +319,7 @@ Field     :    VarDecl              { $$ = $1; }
 
 InterfaceDecl
           :    T_Interface T_Identifier '{' PrototypeList '}'
-                                    { $$ = new InterfaceDecl(new Identifier(@1, $2), $4); }
+                                    { $$ = new InterfaceDecl(new Identifier(@2, $2), $4); }
 ;
 
 PrototypeList

@@ -72,8 +72,8 @@ class ReportError
 
   
   // Errors used by semantic analyzer for expressions
-  static void IncompatibleOperand(Operator *op, Type *rhs); // unary
-  static void IncompatibleOperands(Operator *op, Type *lhs, Type *rhs); // binary
+  static void IncompatibleOperand(const Operator *op, const Type *rhs); // unary
+  static void IncompatibleOperands(const Operator *op, const Type *lhs, const Type *rhs); // binary
   static void ThisOutsideClassScope(This *th);
 
   
@@ -86,7 +86,7 @@ class ReportError
   // Errors used by semantic analyzer for function/method calls
   static void NumArgsMismatch(Identifier *fnIdentifier, int numExpected, int numGiven);
   static void ArgMismatch(Expr *arg, int argIndex, Type *given, Type *expected);
-  static void PrintArgMismatch(Expr *arg, int argIndex, Type *given);
+  static void PrintArgMismatch(Expr *arg, int argIndex, const Type *given);
 
 
   // Errors used by semantic analyzer for field access

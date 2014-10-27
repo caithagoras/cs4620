@@ -17,44 +17,47 @@
 #include <iostream>
 
 
-class Type : public Node 
-{
-  protected:
-    char *typeName;
-
-  public :
-    static Type *intType, *doubleType, *boolType, *voidType,
-                *nullType, *stringType, *errorType;
-
-    Type(yyltype loc) : Node(loc) {}
-    Type(const char *str);
-    
-    virtual void PrintToStream(std::ostream& out) { out << typeName; }
-    friend std::ostream& operator<<(std::ostream& out, Type *t) { t->PrintToStream(out); return out; }
-    virtual bool IsEquivalentTo(Type *other) { return this == other; }
+class Type : public Node {
+  friend class Semantic;
+ protected:
+  char *typeName;
+  
+ public :
+  static Type *intType, *doubleType, *boolType, *voidType,
+    *nullType, *stringType, *errorType;
+  
+ Type(yyltype loc) : Node(loc) {}
+  Type(const char *str);
+  
+  virtual void PrintToStream(std::ostream& out) const { out << typeName; }
+  friend std::ostream& operator<<(std::ostream& out, const Type *t) { t->PrintToStream(out); return out; }
+  friend bool operator==(const Type &t1, const Type &t2);
+  virtual bool IsEquivalentTo(Type *other) { return this == other; }
 };
 
-class NamedType : public Type 
-{
-  protected:
-    Identifier *id;
-    
-  public:
-    NamedType(Identifier *i);
-    
-    void PrintToStream(std::ostream& out) { out << id; }
+class NamedType : public Type {
+  friend class Semantic;
+ protected:
+  Identifier *id;
+  
+ public:
+  NamedType(Identifier *i);
+  void PrintToStream(std::ostream& out) const { out << id; }
+  friend bool operator==(const Type &t1, const Type &t2);
 };
 
-class ArrayType : public Type 
-{
-  protected:
-    Type *elemType;
-
-  public:
-    ArrayType(yyltype loc, Type *elemType);
-    
-    void PrintToStream(std::ostream& out) { out << elemType << "[]"; }
+class ArrayType : public Type {
+  friend class Semantic;
+ protected:
+  Type *elemType;
+  
+ public:
+  ArrayType(yyltype loc, Type *elemType);
+  void PrintToStream(std::ostream& out) const { out << elemType << "[]"; }
+  friend bool operator==(const Type &t1, const Type &t2);
 };
 
+bool operator==(const Type &t1, const Type &t2);
+bool operator!=(const Type &t1, const Type &t2);
  
 #endif

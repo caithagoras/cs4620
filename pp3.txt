@@ -1,0 +1,5 @@
+First pass:
+Check delcarations and construct symbol table. Check for duplication of variable, function, class, and interface declarations, and variable/function declartions within classes and function prototypes within interfaces. All class scopes have their parents pointing to the root scope.
+
+Diff: Duplication of class function is reported in the first pass, unlike the solution, which reports the duplication in the second pass.
+

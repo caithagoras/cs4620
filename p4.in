@@ -1,0 +1,12 @@
+class A {
+}
+
+class B extends A {
+  int A;
+  A a;
+}
+
+int main(){
+  int A;
+  A a;
+}

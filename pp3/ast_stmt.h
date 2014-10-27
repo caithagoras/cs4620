@@ -68,6 +68,7 @@ class LoopStmt : public ConditionalStmt {
 };
 
 class ForStmt : public LoopStmt {
+  friend class Semantic;
  protected:
   Expr *init, *step;
   
@@ -76,13 +77,14 @@ class ForStmt : public LoopStmt {
 };
 
 class WhileStmt : public LoopStmt {
+  friend class Semantic;
  public:
  WhileStmt(Expr *test, Stmt *body) : LoopStmt(test, body) {}
 };
 
 class IfStmt : public ConditionalStmt {
   friend class Semantic;
-  
+
  protected:
   Stmt *elseBody;
   
@@ -97,6 +99,7 @@ class BreakStmt : public Stmt {
 
 class ReturnStmt : public Stmt  
 {
+  friend class Semantic;
   protected:
     Expr *expr;
   
@@ -106,6 +109,7 @@ class ReturnStmt : public Stmt
 
 class PrintStmt : public Stmt
 {
+  friend class Semantic;
   protected:
     List<Expr*> *args;
     
