@@ -33,6 +33,8 @@
 #include "location.h"
 #include <iostream>
 
+class Type;
+
 class Node 
 {
   protected:
@@ -43,7 +45,7 @@ class Node
     Node(yyltype loc);
     Node();
     
-    yyltype *GetLocation()   { return location; }
+    yyltype *GetLocation() const  { return location; }
     void SetParent(Node *p)  { parent = p; }
     Node *GetParent()        { return parent; }
 };
@@ -51,12 +53,14 @@ class Node
 
 class Identifier : public Node 
 {
+  friend class Semantic;
   protected:
     char *name;
     
   public:
     Identifier(yyltype loc, const char *name);
     friend std::ostream& operator<<(std::ostream& out, Identifier *id) { return out << id->name; }
+    friend bool operator==(const Type &t1, const Type &t2);
 };
 
 

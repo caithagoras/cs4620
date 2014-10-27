@@ -23,25 +23,31 @@ class Stmt;
 
 class Decl : public Node 
 {
+  friend class Semantic;
   protected:
     Identifier *id;
   
   public:
     Decl(Identifier *name);
     friend std::ostream& operator<<(std::ostream& out, Decl *d) { return out << d->id; }
+
+    virtual ~Decl() {}
 };
 
 class VarDecl : public Decl 
 {
+  friend class Semantic;
   protected:
     Type *type;
     
   public:
     VarDecl(Identifier *name, Type *type);
+
 };
 
 class ClassDecl : public Decl 
 {
+  friend class Semantic;
   protected:
     List<Decl*> *members;
     NamedType *extends;
@@ -50,10 +56,12 @@ class ClassDecl : public Decl
   public:
     ClassDecl(Identifier *name, NamedType *extends, 
               List<NamedType*> *implements, List<Decl*> *members);
+
 };
 
 class InterfaceDecl : public Decl 
 {
+  friend class Semantic;
   protected:
     List<Decl*> *members;
     
@@ -63,6 +71,7 @@ class InterfaceDecl : public Decl
 
 class FnDecl : public Decl 
 {
+  friend class Semantic;
   protected:
     List<VarDecl*> *formals;
     Type *returnType;
