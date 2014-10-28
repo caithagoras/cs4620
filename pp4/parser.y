@@ -219,7 +219,7 @@ ForStmt   :    T_For '(' Expr ';' Expr ';' Expr ')' Stmt
 BreakStmt :    T_Break ';'          { $$ = new BreakStmt(@1); }
 ;
 
-ReturnStmt:    T_Return Expr ';'    { $$ = new ReturnStmt(@1, $2); }
+ReturnStmt:    T_Return Expr ';'    { $$ = new ReturnStmt(@2, $2); }
           |    T_Return ';'         { $$ = new ReturnStmt(@1, new EmptyExpr); }
 ;
 

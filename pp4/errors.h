@@ -90,13 +90,13 @@ class ReportError
 
 
   // Errors used by semantic analyzer for field access
-  static void FieldNotFoundInBase(Identifier *field, Type *base);
-  static void InaccessibleField(Identifier *field, Type *base);
+  static void FieldNotFoundInBase(Identifier *field, const Type *base);
+  static void InaccessibleField(Identifier *field, const Type *base);
 
 
   // Errors used by semantic analyzer for control structures
   static void TestNotBoolean(Expr *testExpr);
-  static void ReturnMismatch(ReturnStmt *rStmt, Type *given, Type *expected);
+  static void ReturnMismatch(ReturnStmt *rStmt, const Type *given, const Type *expected);
   static void BreakOutsideLoop(BreakStmt *bStmt);
 
 

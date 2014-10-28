@@ -19,9 +19,12 @@
 
 using namespace std;
 
-Scope::Scope(Scope *parent, ScopeType type) {
+Scope::Scope(Scope *parent, ScopeType type, Decl* decl) {
+  if (type == ScopeType(classScope) || type == ScopeType(interfaceScope) || type == ScopeType(fnScope))
+    assert(decl != NULL);
   this->parent = parent;
   this->type = type;
+  this->decl = decl;
 }
 
 Semantic::Semantic(Program *program) {
@@ -31,7 +34,11 @@ Semantic::Semantic(Program *program) {
 }
 
 void Semantic::enter_scope(ScopeType type) {
-  Scope *scope = new Scope(current, type);
+  enter_scope(type, NULL);
+}
+
+void Semantic::enter_scope(ScopeType type, Decl *decl) {
+  Scope *scope = new Scope(current, type, decl);
   current = scope;
   if (scopes.count(scope) == 0)
     scopes.insert(scope);
@@ -56,7 +63,7 @@ void Semantic::override(string ident, FnDecl* fnDecl) {
   Symbol symbol = current->symbols.find(ident)->second;
   assert(dynamic_cast<FnDecl*>(symbol.decl));
   current->symbols.erase(ident);
-  Scope *scope = new Scope(current, fnScope);
+  Scope *scope = new Scope(current, fnScope, fnDecl);
   insert_symbol(ident, Symbol(fnDecl, scope));
 }
 
@@ -105,33 +112,32 @@ void Semantic::build(Decl *decl){
     ReportError::DeclConflict(decl, declared->decl);
   else
     conflict = false;
-  
+
   if (varDecl) {
     if (!conflict) insert_symbol(name, Symbol(decl));
   }
   else if (fnDecl) {
-    Scope *scope = new Scope(current, ScopeType(fnScope));
+    Scope *scope = new Scope(current, ScopeType(fnScope), fnDecl);
     if (!conflict) insert_symbol(name, Symbol(decl, scope));
   }
   else if (classDecl) {
-    Scope *scope = new Scope(current, ScopeType(classScope));
+    Scope *scope = new Scope(current, ScopeType(classScope), classDecl);
     if (!conflict) insert_symbol(name, Symbol(decl, scope));
   }
   else if (interfaceDecl) {
-    Scope *scope = new Scope(current, ScopeType(interfaceScope));
+    Scope *scope = new Scope(current, ScopeType(interfaceScope), interfaceDecl);
     if (!conflict) insert_symbol(name, Symbol(decl, scope));
   }
 }
 
-void Semantic::build_scope_to_id_map() {
-  for (map<string, Symbol>::iterator it = root->symbols.begin(); it != root->symbols.end(); it++)
-    if (dynamic_cast<ClassDecl*>(it->second.decl) || dynamic_cast<InterfaceDecl*>(it->second.decl))
-      scope_to_id.insert(pair<Scope*, string>(it->second.scope, it->first));
-}
-
 void Semantic::build_id_to_type_map() {
-  for (map<Scope*, string>::iterator it = scope_to_id.begin(); it != scope_to_id.end(); it++)
-    id_to_type.insert(pair<string, NamedType>(it->second, NamedType(lookup(root, it->second)->decl->id)));
+  for (map<string, Symbol>::iterator it = root->symbols.begin(); it != root->symbols.end(); it++) {
+    ClassDecl *classDecl = dynamic_cast<ClassDecl*>(it->second.decl);
+    InterfaceDecl *interfaceDecl = dynamic_cast<InterfaceDecl*>(it->second.decl);
+
+    if (classDecl || interfaceDecl)
+      id_to_type.insert(pair<string, NamedType>(it->first, NamedType(lookup(root, it->first)->decl->id)));
+  }
 }
 
 void Semantic::check(Program *program){
@@ -174,7 +180,7 @@ void Semantic::check(VarDecl *varDecl, bool symbol_only, bool suppress_dup_error
 void Semantic::check(FnDecl *fnDecl, bool symbol_only, bool suppress_dup_error){
   string name(fnDecl->id->name);
   if (local_lookup(name) == NULL){
-    Scope *scope = new Scope(current, ScopeType(fnScope));
+    Scope *scope = new Scope(current, ScopeType(fnScope), fnDecl);
     insert_symbol(name, Symbol(fnDecl, scope));
   }
 
@@ -187,7 +193,7 @@ void Semantic::check(FnDecl *fnDecl, bool symbol_only, bool suppress_dup_error){
   if (fnDecl == declared->decl)
     enter_scope(declared->scope);
   else
-    enter_scope(ScopeType(fnScope));
+    enter_scope(ScopeType(fnScope), fnDecl);
 
   // check return type
   if (has_undefined_named_type(fnDecl->returnType))
@@ -213,7 +219,7 @@ void Semantic::check(ClassDecl *classDecl, bool load_only) {
   if (classDecl == declared->decl)
     enter_scope(declared->scope);
   else
-    enter_scope(ScopeType(classScope));
+    enter_scope(ScopeType(classScope), classDecl);
 
   map<string, FnDecl*> inherited_fn;
   // Handle inherited class
@@ -274,16 +280,37 @@ void Semantic::check(ClassDecl *classDecl, bool load_only) {
           check(fnDecl, true, false);
       }
     }
+  
+  // load-only checks ends
+  if (load_only) {
+    exit_scope();
+    return;
+  }
 
-  // Check each declartions for semantic errors if not read_only
-  if (!load_only) {
-    for (int i=0; i<classDecl->members->NumElements(); i++) {
-      VarDecl *varDecl = dynamic_cast<VarDecl*>(classDecl->members->Nth(i));
-      FnDecl *fnDecl = dynamic_cast<FnDecl*>(classDecl->members->Nth(i));
-      if (varDecl)
-        check(varDecl, false, true);
-      else if (fnDecl)
-        check(fnDecl, false, true);
+  // Check each declartions for semantic errors
+  for (int i=0; i<classDecl->members->NumElements(); i++) {
+    VarDecl *varDecl = dynamic_cast<VarDecl*>(classDecl->members->Nth(i));
+    FnDecl *fnDecl = dynamic_cast<FnDecl*>(classDecl->members->Nth(i));
+    if (varDecl)
+      check(varDecl, false, true);
+    else if (fnDecl)
+      check(fnDecl, false, true);
+  }
+
+  // Check if interfaces implemented
+  for (int i=0; i<classDecl->implements->NumElements(); i++) {
+    string interface_name(classDecl->implements->Nth(i)->id->name);
+    const Symbol *implementsSymbol = lookup(interface_name);
+    if (implementsSymbol == NULL || dynamic_cast<InterfaceDecl*>(implementsSymbol->decl) == NULL)
+      continue;
+
+    for (map<string, Symbol>::iterator it = implementsSymbol->scope->symbols.begin(); it != implementsSymbol->scope->symbols.end(); it++) {
+      const Symbol* actual_fn_symbol = local_lookup(it->first);
+      FnDecl *actual_fn = dynamic_cast<FnDecl*>(actual_fn_symbol->decl);
+      if (actual_fn->body == NULL) {
+        ReportError::InterfaceNotImplemented(classDecl, classDecl->implements->Nth(i));
+        break;
+      }
     }
   }
 
@@ -297,7 +324,7 @@ void Semantic::check(InterfaceDecl *interfaceDecl){
   if (interfaceDecl == declared->decl)
     enter_scope(declared->scope);
   else
-    enter_scope(ScopeType(interfaceScope));
+    enter_scope(ScopeType(interfaceScope), interfaceDecl);
 
   for (int i=0; i<interfaceDecl->members->NumElements(); i++){
     FnDecl *member = dynamic_cast<FnDecl*>(interfaceDecl->members->Nth(i));
@@ -375,6 +402,8 @@ void Semantic::check(IfStmt *ifStmt) {
   if (*test_type != *Type::boolType && *test_type != *Type::errorType)
     ReportError::TestNotBoolean(ifStmt->test);
   check(ifStmt->body);
+  if (ifStmt->elseBody != NULL)
+    check(ifStmt->elseBody);
   exit_scope();
 }
 
@@ -389,6 +418,16 @@ void Semantic::check(BreakStmt *breakStmt) {
 }
 
 void Semantic::check(ReturnStmt *returnStmt) {
+  const Type *actual_return_type = check(returnStmt->expr);
+  Scope *p = current;
+  while (p->type != ScopeType(fnScope))
+    p = p->parent;
+  Type* expected_return_type = dynamic_cast<FnDecl*>(p->decl)->returnType;
+  if (*actual_return_type == *expected_return_type) return;
+  if (*actual_return_type == *Type::errorType || *actual_return_type == *Type::errorType) return;
+  if (*actual_return_type == *Type::nullType && dynamic_cast<NamedType*>(expected_return_type)) return;
+  if (is_compatible_inheritance(expected_return_type, actual_return_type)) return;
+  ReportError::ReturnMismatch(returnStmt, actual_return_type, expected_return_type);
 }
 
 void Semantic::check(PrintStmt *printStmt) {
@@ -400,6 +439,8 @@ void Semantic::check(PrintStmt *printStmt) {
 }
 
 const Type* Semantic::check(Expr *expr) {
+  if (dynamic_cast<EmptyExpr*>(expr))
+    return Type::voidType;
   if (dynamic_cast<IntConstant*>(expr))
     return Type::intType;
   else if (dynamic_cast<DoubleConstant*>(expr))
@@ -429,45 +470,86 @@ const Type* Semantic::check(Expr *expr) {
 }
 
 const Type* Semantic::check(CompoundExpr* expr) {
-  if (expr->left == NULL){
+  if (expr->left == NULL) {
     const Type* type_rhs = check(expr->right);
     return check_compatibility(expr->op, type_rhs);
   }
-  else{
+  else {
     const Type* type_lhs = check(expr->left);
     const Type* type_rhs = check(expr->right);
     return check_compatibility(expr->op, type_lhs, type_rhs);
   }
 }
 
-const Type* Semantic::check(LValue* expr){
-  FieldAccess *fieldAccess = dynamic_cast<FieldAccess*>(expr);
-  if (fieldAccess && !fieldAccess->base){
-    const Symbol *symbol = lookup(fieldAccess->field->name);
+const Type* Semantic::check(LValue* expr) {
+  FieldAccess *field_access = dynamic_cast<FieldAccess*>(expr);
+  ArrayAccess *array_access = dynamic_cast<ArrayAccess*>(expr);
+  
+  if (field_access && field_access->base == NULL) {
+    const Symbol *symbol = lookup(field_access->field->name);
     if (!symbol){
-      ReportError::IdentifierNotDeclared(fieldAccess->field, reasonT(LookingForVariable));
+      ReportError::IdentifierNotDeclared(field_access->field, reasonT(LookingForVariable));
       return Type::errorType;
     }
 
     VarDecl *varDecl = dynamic_cast<VarDecl*>(symbol->decl);
     if (!varDecl){
-      ReportError::IdentifierNotDeclared(fieldAccess->field, reasonT(LookingForVariable));
+      ReportError::IdentifierNotDeclared(field_access->field, reasonT(LookingForVariable));
       return Type::errorType;
     }
 
-    if (varDecl->type == NULL)
-      return Type::errorType;
-    else
-      return varDecl->type;
+    return varDecl->type;
   }
-  return Type::errorType;    
+
+  if (field_access && field_access->base != NULL) {
+    const Type* base_type = check(field_access->base);
+    if (*base_type == *Type::errorType) return Type::errorType;
+    const NamedType* base_named_type = dynamic_cast<const NamedType*>(base_type);
+    if (!base_named_type) {
+      ReportError::FieldNotFoundInBase(field_access->field, base_type);
+      return Type::errorType;
+    }
+    const Symbol* field_symbol = lookup(lookup(root, base_named_type->id->name)->scope, field_access->field->name);
+    if (field_symbol == NULL || dynamic_cast<VarDecl*>(field_symbol->decl) == NULL) {
+      ReportError::FieldNotFoundInBase(field_access->field, base_type);
+      return Type::errorType;
+    }
+    Scope *p = current;
+    bool in_scope = false;
+    while (p != root) {
+      if (p->type == ScopeType(classScope)) {
+        if (strcmp(p->decl->id->name, base_named_type->id->name) == 0)
+          in_scope = true;
+        break;
+      }
+      p = p->parent;
+    }
+
+    if (!in_scope) {
+      ReportError::InaccessibleField(field_access->field, base_type);
+      return Type::errorType;
+    }
+    return dynamic_cast<VarDecl*>(field_symbol->decl)->type;
+  }
+  
+  if (array_access) {
+    const ArrayType *base_type = dynamic_cast<const ArrayType*>(check(array_access->base));
+    if (!base_type)
+      ReportError::BracketsOnNonArray(array_access->base);
+    if (*check(array_access->subscript) != *Type::intType)
+      ReportError::SubscriptNotInteger(array_access->subscript);
+    if (base_type) return base_type->elemType;
+    return Type::errorType;
+  }
+
+  assert(0);
 }
 
 const Type* Semantic::check(This* expr){
   Scope *p = current;
   while (p->type != ScopeType(rootScope)){
     if (p->type == ScopeType(classScope) || p->type == ScopeType(interfaceScope)) {
-      string id = scope_to_id.find(p)->second;
+      string id = p->decl->id->name;
       return &(id_to_type.find(id)->second);
     }
     p=p->parent;
@@ -615,7 +697,6 @@ bool Semantic::is_matched_prototype(FnDecl *d1, FnDecl *d2) {
 
 void Semantic::analyze() {
   build(program);
-  build_scope_to_id_map();
   build_id_to_type_map();
   check(program);
 }

@@ -147,6 +147,7 @@ class This : public Expr
 
 class ArrayAccess : public LValue 
 {
+  friend class Semantic;
   protected:
     Expr *base, *subscript;
     

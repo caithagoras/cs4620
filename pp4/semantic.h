@@ -42,12 +42,13 @@ class Symbol {
 
 class Scope {
  public:
-  Scope(Scope *parent, ScopeType type);
+  Scope(Scope *parent, ScopeType type, Decl *decl = NULL);
 
  protected:
   map<string, Symbol> symbols;
   Scope *parent;
   ScopeType type;
+  Decl *decl;
   friend class Semantic;
 };
 
@@ -56,12 +57,12 @@ class Semantic {
   Program *program;
   set<Scope*> scopes;
   Scope *current,*root;
-  map<Scope*, string> scope_to_id;
   map<string, NamedType> id_to_type;
   set<Decl*> loaded;
   vector<ArrayType> array_types;
 
   void enter_scope(ScopeType type);
+  void enter_scope(ScopeType type, Decl *decl);
   void enter_scope(Scope *scope);
   void exit_scope();
   void insert_symbol(string ident, Symbol symbol);
@@ -73,7 +74,6 @@ class Semantic {
   void build(Program* program);
   void build(Decl *decl);
 
-  void build_scope_to_id_map();
   void build_id_to_type_map();
 
   void check(Program *program);

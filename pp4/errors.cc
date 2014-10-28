@@ -145,19 +145,19 @@ void ReportError::ArgMismatch(Expr *arg, int argIndex, Type *given, Type *expect
   OutputError(arg->GetLocation(), s.str());
 }
 
-void ReportError::ReturnMismatch(ReturnStmt *rStmt, Type *given, Type *expected) {
+void ReportError::ReturnMismatch(ReturnStmt *rStmt, const Type *given, const Type *expected) {
     stringstream s;
     s << "Incompatible return: " << given << " given, " << expected << " expected";
     OutputError(rStmt->GetLocation(), s.str());
 }
 
-void ReportError::FieldNotFoundInBase(Identifier *field, Type *base) {
+void ReportError::FieldNotFoundInBase(Identifier *field, const Type *base) {
     stringstream s;
     s << base << " has no such field '" << field <<"'";
     OutputError(field->GetLocation(), s.str());
 }
      
-void ReportError::InaccessibleField(Identifier *field, Type *base) {
+void ReportError::InaccessibleField(Identifier *field, const Type *base) {
     stringstream s;
     s  << base << " field '" << field << "' only accessible within class scope";
     OutputError(field->GetLocation(), s.str());
