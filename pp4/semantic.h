@@ -60,6 +60,7 @@ class Semantic {
   map<string, NamedType> id_to_type;
   set<Decl*> loaded;
   vector<ArrayType> array_types;
+  Symbol *fn_array_length;
 
   void enter_scope(ScopeType type);
   void enter_scope(ScopeType type, Decl *decl);
@@ -70,6 +71,8 @@ class Semantic {
   const Symbol* lookup(const Scope *scope, string s) const;
   const Symbol* lookup(string s) const;
   const Symbol* local_lookup(string s) const;
+
+  void init();
 
   void build(Program* program);
   void build(Decl *decl);
@@ -97,10 +100,12 @@ class Semantic {
   const Type* check(This *expr);
   const Type* check(NewExpr *expr);
   const Type* check(NewArrayExpr *expr);
+  const Type* check(Call *expr);
 
   bool has_undefined_named_type(const Type *type); // Returns true when the core type is a NamedType that is undefined, false otherwise.
   const Type* check_compatibility(const Operator *op, const Type* rhs);
   const Type* check_compatibility(const Operator *op, const Type* lhs, const Type* rhs);
+  const Type* check_compatibility(const Type* lhs, const Type* rhs);
   bool is_compatible_inheritance(const Type* parent, const Type *derived);
   bool find_parent(const NamedType *derived, string parent);
   bool is_matched_prototype(FnDecl *d1, FnDecl *d2);

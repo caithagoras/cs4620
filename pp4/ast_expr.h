@@ -177,6 +177,7 @@ class FieldAccess : public LValue
  * and sort it out later. */
 class Call : public Expr 
 {
+  friend class Semantic;
   protected:
     Expr *base;	// will be NULL if no explicit base
     Identifier *field;

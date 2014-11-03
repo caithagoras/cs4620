@@ -85,7 +85,7 @@ class ReportError
 
   // Errors used by semantic analyzer for function/method calls
   static void NumArgsMismatch(Identifier *fnIdentifier, int numExpected, int numGiven);
-  static void ArgMismatch(Expr *arg, int argIndex, Type *given, Type *expected);
+  static void ArgMismatch(Expr *arg, int argIndex, const Type *given, const Type *expected);
   static void PrintArgMismatch(Expr *arg, int argIndex, const Type *given);
 
 

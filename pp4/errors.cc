@@ -139,7 +139,7 @@ void ReportError::NumArgsMismatch(Identifier *fnIdent, int numExpected, int numG
     OutputError(fnIdent->GetLocation(), s.str());
 }
 
-void ReportError::ArgMismatch(Expr *arg, int argIndex, Type *given, Type *expected) {
+void ReportError::ArgMismatch(Expr *arg, int argIndex, const Type *given, const Type *expected) {
   stringstream s;
   s << "Incompatible argument " << argIndex << ": " << given << " given, " << expected << " expected";
   OutputError(arg->GetLocation(), s.str());

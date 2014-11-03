@@ -31,6 +31,14 @@ Semantic::Semantic(Program *program) {
   this->program = program;
   current = NULL;
   root = NULL;
+  init();
+}
+
+void Semantic::init() {
+  // length() for array
+  List<VarDecl*> *empty_parameter_list = new List<VarDecl*>();
+  Decl *length_decl = new FnDecl(new Identifier(yyltype(), "length()"), Type::intType, empty_parameter_list);
+  fn_array_length = new Symbol(length_decl);
 }
 
 void Semantic::enter_scope(ScopeType type) {
@@ -201,7 +209,9 @@ void Semantic::check(FnDecl *fnDecl, bool symbol_only, bool suppress_dup_error){
 
   // check parameter list
   for (int i=0; i<fnDecl->formals->NumElements(); i++)
-    check(dynamic_cast<VarDecl*>(fnDecl->formals->Nth(i)), false, false);
+    check(dynamic_cast<VarDecl*>(fnDecl->formals->Nth(i)), true, false);
+  for (int i=0; i<fnDecl->formals->NumElements(); i++)
+    check(dynamic_cast<VarDecl*>(fnDecl->formals->Nth(i)), false, true);
 
   // check statement
   if (fnDecl->body != NULL)
@@ -370,7 +380,9 @@ void Semantic::check(Stmt *stmt) {
 void Semantic::check(StmtBlock *stmtBlock) {
   enter_scope(ScopeType(blockScope));
   for (int i=0; i<stmtBlock->decls->NumElements(); i++)
-    check(stmtBlock->decls->Nth(i), false, false);
+    check(stmtBlock->decls->Nth(i), true, false);
+  for (int i=0; i<stmtBlock->decls->NumElements(); i++)
+    check(stmtBlock->decls->Nth(i), false, true);
   for (int i=0; i<stmtBlock->stmts->NumElements(); i++)
     check(stmtBlock->stmts->Nth(i));
   exit_scope();
@@ -423,9 +435,7 @@ void Semantic::check(ReturnStmt *returnStmt) {
   while (p->type != ScopeType(fnScope))
     p = p->parent;
   Type* expected_return_type = dynamic_cast<FnDecl*>(p->decl)->returnType;
-  if (*actual_return_type == *expected_return_type) return;
-  if (*actual_return_type == *Type::errorType || *actual_return_type == *Type::errorType) return;
-  if (*actual_return_type == *Type::nullType && dynamic_cast<NamedType*>(expected_return_type)) return;
+  if (check_compatibility(expected_return_type, actual_return_type)) return;
   if (is_compatible_inheritance(expected_return_type, actual_return_type)) return;
   ReportError::ReturnMismatch(returnStmt, actual_return_type, expected_return_type);
 }
@@ -465,6 +475,8 @@ const Type* Semantic::check(Expr *expr) {
     return check(dynamic_cast<NewExpr*>(expr));
   else if (dynamic_cast<NewArrayExpr*>(expr))
     return check(dynamic_cast<NewArrayExpr*>(expr));
+  else if (dynamic_cast<Call*>(expr))
+    return check(dynamic_cast<Call*>(expr));  
 
   return Type::errorType;
 }
@@ -545,7 +557,7 @@ const Type* Semantic::check(LValue* expr) {
   assert(0);
 }
 
-const Type* Semantic::check(This* expr){
+const Type* Semantic::check(This* expr) {
   Scope *p = current;
   while (p->type != ScopeType(rootScope)){
     if (p->type == ScopeType(classScope) || p->type == ScopeType(interfaceScope)) {
@@ -558,7 +570,7 @@ const Type* Semantic::check(This* expr){
   return Type::errorType;
 }
 
-const Type* Semantic::check(NewExpr *expr){
+const Type* Semantic::check(NewExpr *expr) {
   const Symbol* type_symbol = lookup(expr->cType->id->name);
   if (type_symbol && dynamic_cast<ClassDecl*>(type_symbol->decl))
     return expr->cType;
@@ -566,13 +578,71 @@ const Type* Semantic::check(NewExpr *expr){
   ReportError::IdentifierNotDeclared(expr->cType->id, reasonT(LookingForClass));
   return Type::errorType;
 }
-const Type* Semantic::check(NewArrayExpr *expr){
+
+const Type* Semantic::check(NewArrayExpr *expr) {
   if (*check(expr->size) != *Type::intType)
     ReportError::NewArraySizeNotInteger(expr->size);
   if (has_undefined_named_type(expr->elemType))
     return Type::errorType;
   array_types.push_back(ArrayType(yyltype(), expr->elemType));
   return &(array_types.back());
+}
+
+const Type* Semantic::check(Call *expr) {
+  const Type *base_type;
+  const Symbol* called_fn;
+
+  vector<const Type*> actual_types;
+  for (int i=0; i<expr->actuals->NumElements(); i++)
+    actual_types.push_back(check(expr->actuals->Nth(i)));
+
+  if (expr->base != NULL) {
+    base_type = check(expr->base);
+    if (base_type == Type::errorType) return Type::errorType;
+    const ArrayType *base_array_type = dynamic_cast<const ArrayType*>(base_type);
+    
+    // Check length() method for array
+    if (base_array_type && strcmp(expr->field->name, "length")==0)
+      called_fn = fn_array_length;
+    else {
+      const NamedType *base_named_type = dynamic_cast<const NamedType*>(base_type);
+      if (!base_named_type) {
+        ReportError::FieldNotFoundInBase(expr->field, base_type);
+        return Type::errorType;
+      }
+      Scope *base_scope = lookup(root, base_named_type->id->name)->scope;
+      called_fn = lookup(base_scope, expr->field->name);
+    }
+  }
+  else
+    called_fn = lookup(expr->field->name);
+
+  // Check if function exists
+  if (called_fn == NULL || !dynamic_cast<FnDecl*>(called_fn->decl)) {
+    if (expr->base == NULL)
+      ReportError::IdentifierNotDeclared(expr->field, reasonT(LookingForFunction));
+    else
+      ReportError::FieldNotFoundInBase(expr->field, base_type);
+    return Type::errorType;
+  }
+
+  // Check # of arguments
+  FnDecl *fnDecl = dynamic_cast<FnDecl*>(called_fn->decl);
+  if (fnDecl->formals->NumElements() != expr->actuals->NumElements())
+    ReportError::NumArgsMismatch(expr->field, fnDecl->formals->NumElements(), expr->actuals->NumElements());
+
+  int num_args = min(fnDecl->formals->NumElements(), expr->actuals->NumElements());
+
+  // Check types of arguments
+  for (int i=0; i<num_args; i++) {
+    const Type *formal_type = fnDecl->formals->Nth(i)->type;
+    const Type *actual_type = actual_types[i];
+    if (check_compatibility(formal_type, actual_type)) continue;
+    if (is_compatible_inheritance(formal_type, actual_type)) continue;
+    ReportError::ArgMismatch(expr->actuals->Nth(i), i+1, actual_type, formal_type);
+  }
+
+  return fnDecl->returnType;
 }
 
 bool Semantic::has_undefined_named_type(const Type *type) {
@@ -591,14 +661,14 @@ bool Semantic::has_undefined_named_type(const Type *type) {
   return false;
 }
 
-const Type* Semantic::check_compatibility(const Operator *op, const Type* rhs){
-  if (!strcmp(op->tokenString, "-")){
+const Type* Semantic::check_compatibility(const Operator *op, const Type* rhs) {
+  if (!strcmp(op->tokenString, "-")) {
     if (rhs == Type::intType || rhs == Type::doubleType) return rhs;
     if (rhs == Type::errorType) return Type::errorType;
     ReportError::IncompatibleOperand(op, rhs);
     return Type::errorType;
   }
-  if (!strcmp(op->tokenString, "!")){
+  if (!strcmp(op->tokenString, "!")) {
     if (rhs == Type::boolType) return rhs;
     if (rhs == Type::errorType) return Type::boolType;
     ReportError::IncompatibleOperand(op, rhs);
@@ -608,14 +678,15 @@ const Type* Semantic::check_compatibility(const Operator *op, const Type* rhs){
 }
 
 const Type* Semantic::check_compatibility(const Operator *op, const Type* lhs, const Type* rhs) {
+  const Type* resolved_type;
+  resolved_type = check_compatibility(lhs, rhs);
   if (!strcmp(op->tokenString, "+")
       || !strcmp(op->tokenString, "-")
       || !strcmp(op->tokenString, "*")
       || !strcmp(op->tokenString, "/")
-      || !strcmp(op->tokenString, "%")){
-    if (*lhs == *Type::intType && *rhs == *Type::intType) return Type::intType;
-    if (*lhs == *Type::doubleType && *rhs == *Type::doubleType) return Type::doubleType;
-    if (*lhs == *Type::errorType || *rhs == *Type::errorType) return Type::errorType;
+      || !strcmp(op->tokenString, "%")) {
+    if (resolved_type != NULL && (*resolved_type == *Type::intType || *resolved_type == *Type::doubleType || *resolved_type == *Type::errorType))
+      return resolved_type;
     ReportError::IncompatibleOperands(op, lhs, rhs);
     return Type::errorType;
   }
@@ -624,41 +695,43 @@ const Type* Semantic::check_compatibility(const Operator *op, const Type* lhs, c
       || !strcmp(op->tokenString, "<=")
       || !strcmp(op->tokenString, ">")
       || !strcmp(op->tokenString, ">=")) {
-    if (*lhs == *Type::intType && *rhs == *Type::intType) return Type::boolType;
-    if (*lhs == *Type::doubleType && *rhs == *Type::doubleType) return Type::boolType;
-    if (*lhs == *Type::errorType || *rhs == *Type::errorType) return Type::boolType;
+    if (resolved_type != NULL && (*resolved_type == *Type::intType || *resolved_type == *Type::doubleType || *resolved_type == *Type::errorType))
+      return Type::boolType;
     ReportError::IncompatibleOperands(op, lhs, rhs);
     return Type::boolType;
   }
 
   if (!strcmp(op->tokenString, "==")
       || !strcmp(op->tokenString, "!=")) {
-    if (*lhs == *rhs) return Type::boolType;
-    if (*rhs == *Type::nullType && dynamic_cast<const NamedType*>(lhs)) return Type::boolType;
-    if (*lhs == *Type::errorType || *rhs == *Type::errorType) return Type::boolType;
-    if (is_compatible_inheritance(lhs, rhs)) return Type::boolType;
+    if (resolved_type != NULL) return Type::boolType;
+    if (is_compatible_inheritance(lhs, rhs) || is_compatible_inheritance(rhs, lhs)) return Type::boolType;
     ReportError::IncompatibleOperands(op, lhs, rhs);
     return Type::boolType;
   }
 
   if (!strcmp(op->tokenString, "&&")
       || !strcmp(op->tokenString, "||")) {
-    if (*lhs == *Type::boolType && *rhs == *Type::boolType) return Type::boolType;
-    if (*lhs == *Type::errorType || *rhs == *Type::errorType) return Type::boolType;
+    if (resolved_type != NULL && *resolved_type == *Type::boolType) return Type::boolType;
     ReportError::IncompatibleOperands(op, lhs, rhs);
     return Type::boolType;
   }
 
   if (!strcmp(op->tokenString, "=")) {
-    if (*lhs == *rhs) return lhs;
-    if (*rhs == *Type::nullType && dynamic_cast<const NamedType*>(lhs)) return lhs;
-    if (*lhs == *Type::errorType || *rhs == *Type::errorType) return lhs;
+    if (resolved_type != NULL) return resolved_type;
     if (is_compatible_inheritance(lhs, rhs)) return lhs;
     ReportError::IncompatibleOperands(op, lhs, rhs);
     return lhs;
   }
 
   return Type::errorType;
+}
+
+const Type* Semantic::check_compatibility(const Type* lhs, const Type* rhs) {
+  if (*lhs == *Type::errorType || *rhs == *Type::errorType) return Type::errorType;
+  if (*lhs == *rhs) return lhs;
+  if (*lhs == *Type::nullType && dynamic_cast<const NamedType*>(rhs)) return rhs;
+  if (*rhs == *Type::nullType && dynamic_cast<const NamedType*>(lhs)) return lhs;
+  return NULL;
 }
 
 bool Semantic::is_compatible_inheritance(const Type *parent, const Type *derived) {
