@@ -1,0 +1,5 @@
+
+*** Failure: Assertion failed: ast_stmt.cc, line 12:
+    d != NULL
+
+Aborted
