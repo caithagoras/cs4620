@@ -6,27 +6,19 @@
 #include "ast_type.h"
 #include "ast_decl.h"
 #include "ast_expr.h"
-
+#include "errors.h"
+#include "semantic.h"
 
 Program::Program(List<Decl*> *d) {
     Assert(d != NULL);
     (decls=d)->SetParentAll(this);
 }
 
-void Program::Check() {
-    /* You can use your pp3 semantic analysis or leave it out if
-     * you want to avoid the clutter.  We won't test pp5 against 
-     * semantically-invalid programs.
-     */
-}
-void Program::Emit() {
-    /* pp5: here is where the code generation is kicked off.
-     *      The general idea is perform a tree traversal of the
-     *      entire program, generating instructions as you go.
-     *      Each node can have its own way of translating itself,
-     *      which makes for a great use of inheritance and
-     *      polymorphism in the node classes.
-     */
+void Program::CheckAndEmit() {
+  Semantic *semantic = new Semantic(this);
+  semantic->analyze();
+  if (ReportError::NumErrors() > 0) return;
+  semantic->generate();
 }
 
 StmtBlock::StmtBlock(List<VarDecl*> *d, List<Stmt*> *s) {

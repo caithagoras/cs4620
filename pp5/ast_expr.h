@@ -5,8 +5,8 @@
  * language (add, call, New, etc.) there is a corresponding
  * node class for that construct. 
  *
- * pp5: You will need to extend the Expr classes to implement 
- * code generation for expressions.
+ * pp3: You will need to extend the Expr classes to implement 
+ * semantic analysis for rules pertaining to expressions.
  */
 
 
@@ -80,16 +80,18 @@ class NullConstant: public Expr
 
 class Operator : public Node 
 {
+  friend class Semantic;
   protected:
     char tokenString[4];
     
   public:
     Operator(yyltype loc, const char *tok);
-    friend std::ostream& operator<<(std::ostream& out, Operator *o) { return out << o->tokenString; }
+    friend std::ostream& operator<<(std::ostream& out, const Operator *o) { return out << o->tokenString; }
  };
  
 class CompoundExpr : public Expr
 {
+  friend class Semantic;
   protected:
     Operator *op;
     Expr *left, *right; // left will be NULL if unary
@@ -116,7 +118,6 @@ class EqualityExpr : public CompoundExpr
 {
   public:
     EqualityExpr(Expr *lhs, Operator *op, Expr *rhs) : CompoundExpr(lhs,op,rhs) {}
-    const char *GetPrintNameForNode() { return "EqualityExpr"; }
 };
 
 class LogicalExpr : public CompoundExpr 
@@ -124,14 +125,12 @@ class LogicalExpr : public CompoundExpr
   public:
     LogicalExpr(Expr *lhs, Operator *op, Expr *rhs) : CompoundExpr(lhs,op,rhs) {}
     LogicalExpr(Operator *op, Expr *rhs) : CompoundExpr(op,rhs) {}
-    const char *GetPrintNameForNode() { return "LogicalExpr"; }
 };
 
 class AssignExpr : public CompoundExpr 
 {
   public:
     AssignExpr(Expr *lhs, Operator *op, Expr *rhs) : CompoundExpr(lhs,op,rhs) {}
-    const char *GetPrintNameForNode() { return "AssignExpr"; }
 };
 
 class LValue : public Expr 
@@ -148,6 +147,7 @@ class This : public Expr
 
 class ArrayAccess : public LValue 
 {
+  friend class Semantic;
   protected:
     Expr *base, *subscript;
     
@@ -162,6 +162,7 @@ class ArrayAccess : public LValue
  * and sort it out later. */
 class FieldAccess : public LValue 
 {
+  friend class Semantic;
   protected:
     Expr *base;	// will be NULL if no explicit base
     Identifier *field;
@@ -176,6 +177,7 @@ class FieldAccess : public LValue
  * and sort it out later. */
 class Call : public Expr 
 {
+  friend class Semantic;
   protected:
     Expr *base;	// will be NULL if no explicit base
     Identifier *field;
@@ -187,6 +189,7 @@ class Call : public Expr
 
 class NewExpr : public Expr
 {
+  friend class Semantic;
   protected:
     NamedType *cType;
     
@@ -196,6 +199,7 @@ class NewExpr : public Expr
 
 class NewArrayExpr : public Expr
 {
+  friend class Semantic;
   protected:
     Expr *size;
     Type *elemType;

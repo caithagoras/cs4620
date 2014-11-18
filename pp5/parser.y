@@ -20,6 +20,8 @@
 #include "parser.h"
 #include "errors.h"
 
+class Semantic;
+
 void yyerror(const char *msg); // standard error-handling routine
 
 %}
@@ -127,10 +129,9 @@ Program   :    DeclList            {
                                       @1; 
                                       Program *program = new Program($1);
                                       // if no errors, advance to next phase
+                                      Semantic *semantic;
                                       if (ReportError::NumErrors() == 0) 
-                                          program->Check(); 
-                                      if (ReportError::NumErrors() == 0) 
-                                          program->Emit();
+                                          program->CheckAndEmit();
                                     }
           ;
 

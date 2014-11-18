@@ -5,8 +5,8 @@
  * language (for, if, return, etc.) there is a corresponding
  * node class for that construct. 
  *
- * pp5: You will need to extend the Stmt classes to implement
- * code generation for statements.
+ * pp3: You will need to extend the Stmt classes to implement
+ * semantic analysis for rules pertaining to statements.
  */
 
 
@@ -19,85 +19,88 @@
 class Decl;
 class VarDecl;
 class Expr;
+class Semantic;
   
-class Program : public Node
-{
-  protected:
-     List<Decl*> *decls;
-     
-  public:
-     Program(List<Decl*> *declList);
-     void Check();
-     void Emit();
+class Program : public Node{
+ protected:
+  List<Decl*> *decls;
+  friend class Semantic;
+  
+ public:
+  Program(List<Decl*> *declList);
+  void CheckAndEmit();
 };
 
-class Stmt : public Node
-{
-  public:
-     Stmt() : Node() {}
-     Stmt(yyltype loc) : Node(loc) {}
+class Stmt : public Node {
+ public:
+ Stmt() : Node() {}
+ Stmt(yyltype loc) : Node(loc) {}
+  virtual ~Stmt() {}
 };
 
-class StmtBlock : public Stmt 
-{
-  protected:
-    List<VarDecl*> *decls;
-    List<Stmt*> *stmts;
+class StmtBlock : public Stmt {
+  friend class Semantic;
+
+ protected:
+  List<VarDecl*> *decls;
+  List<Stmt*> *stmts;
     
-  public:
-    StmtBlock(List<VarDecl*> *variableDeclarations, List<Stmt*> *statements);
+ public:
+  StmtBlock(List<VarDecl*> *variableDeclarations, List<Stmt*> *statements);
 };
 
   
-class ConditionalStmt : public Stmt
-{
-  protected:
-    Expr *test;
-    Stmt *body;
+class ConditionalStmt : public Stmt {
   
-  public:
-    ConditionalStmt(Expr *testExpr, Stmt *body);
+ protected:
+  Expr *test;
+  Stmt *body;
+
+ public:
+  ConditionalStmt(Expr *testExpr, Stmt *body);
 };
 
-class LoopStmt : public ConditionalStmt 
-{
-  public:
-    LoopStmt(Expr *testExpr, Stmt *body)
-            : ConditionalStmt(testExpr, body) {}
+class LoopStmt : public ConditionalStmt {
+  friend class Semantic;
+
+ public:
+ LoopStmt(Expr *testExpr, Stmt *body)
+   : ConditionalStmt(testExpr, body) {}
 };
 
-class ForStmt : public LoopStmt 
-{
-  protected:
-    Expr *init, *step;
+class ForStmt : public LoopStmt {
+  friend class Semantic;
+ protected:
+  Expr *init, *step;
   
-  public:
-    ForStmt(Expr *init, Expr *test, Expr *step, Stmt *body);
+ public:
+  ForStmt(Expr *init, Expr *test, Expr *step, Stmt *body);
 };
 
-class WhileStmt : public LoopStmt 
-{
-  public:
-    WhileStmt(Expr *test, Stmt *body) : LoopStmt(test, body) {}
+class WhileStmt : public LoopStmt {
+  friend class Semantic;
+ public:
+ WhileStmt(Expr *test, Stmt *body) : LoopStmt(test, body) {}
 };
 
-class IfStmt : public ConditionalStmt 
-{
-  protected:
-    Stmt *elseBody;
+class IfStmt : public ConditionalStmt {
+  friend class Semantic;
+
+ protected:
+  Stmt *elseBody;
   
-  public:
-    IfStmt(Expr *test, Stmt *thenBody, Stmt *elseBody);
+ public:
+  IfStmt(Expr *test, Stmt *thenBody, Stmt *elseBody);
 };
 
-class BreakStmt : public Stmt 
-{
-  public:
-    BreakStmt(yyltype loc) : Stmt(loc) {}
+class BreakStmt : public Stmt {
+ public:
+ BreakStmt(yyltype loc) : Stmt(loc) {}
 };
 
 class ReturnStmt : public Stmt  
 {
+  friend class Semantic;
   protected:
     Expr *expr;
   
@@ -107,6 +110,7 @@ class ReturnStmt : public Stmt
 
 class PrintStmt : public Stmt
 {
+  friend class Semantic;
   protected:
     List<Expr*> *args;
     
