@@ -1,0 +1,31 @@
+int a;
+
+int main(int g){
+  int c;
+  c=g+1;
+  for (c=0;c<100;c=c+1){
+    int c;
+    int g;
+    int k;
+    int x;
+    {
+      int f;
+      while (true){
+        int p;
+        int s;
+        int f;
+        int c;
+        int g;
+        int t;
+        if (3==5){
+          int x1;
+          
+          string x2;
+          x1=3;
+        }
+        c=g;
+        t=s+c;
+      }
+    }
+  }
+}

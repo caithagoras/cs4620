@@ -14,6 +14,7 @@
 #include "ast_type.h"
 #include "ast_decl.h"
 #include "ast_expr.h"
+#include "codegen.h"
 using namespace std;
 
 typedef enum {
@@ -21,8 +22,6 @@ typedef enum {
   fnScope,
   classScope,
   interfaceScope,
-  loopScope,
-  ifScope,
   blockScope
 } ScopeType;
 
@@ -32,12 +31,15 @@ class Symbol {
   friend class Semantic;
 
  public:
-  explicit Symbol(Decl *d): decl(d), scope(NULL) {}
-  explicit Symbol(Decl *d, Scope *s): decl(d), scope(s) {}
+  explicit Symbol(Decl *d): decl(d), scope(NULL), location(NULL) {}
+  explicit Symbol(Decl *d, Scope *s): decl(d), scope(s), location(NULL) {}
+  void set_location_fp_relative(int offset);
+  void set_location_gp_relative(int offset);
 
  protected:
   Decl *decl;
   Scope *scope; // NULL for Variable Declarations
+  Location *location;
 };
 
 class Scope {
@@ -62,6 +64,9 @@ class Semantic {
   set<Decl*> loaded;
   vector<ArrayType> array_types;
   Symbol *fn_array_length;
+  
+  CodeGenerator instructions;
+  int gp_offset;
 
   // Common Internal
   void enter_scope(ScopeType type);
@@ -70,12 +75,11 @@ class Semantic {
   void exit_scope();
   void insert_symbol(string ident, Symbol symbol);
   void override(string ident, FnDecl* fnDecl);
-  const Symbol* lookup(const Scope *scope, string s) const;
-  const Symbol* lookup(string s) const;
-  const Symbol* local_lookup(string s) const;
+  Symbol* lookup(Scope *scope, string s) const;
+  Symbol* lookup(string s) const;
+  Symbol* local_lookup(string s) const;
 
   // Semantic Analyzer Internal
-  void init_semantic_analyzer();
 
   void build(Program* program);
   void build(Decl *decl);
@@ -99,7 +103,8 @@ class Semantic {
 
   const Type* check(Expr *expr);
   const Type* check(CompoundExpr *expr);
-  const Type* check(LValue *expr);
+  const Type* check(FieldAccess *field_access);
+  const Type* check(ArrayAccess *array_access);
   const Type* check(This *expr);
   const Type* check(NewExpr *expr);
   const Type* check(NewArrayExpr *expr);
@@ -116,6 +121,30 @@ class Semantic {
   // Code Generator Internal
   bool check_main();
   void emit(Program *program);
+  void emit(VarDecl *varDecl, bool is_global, int *offset);
+  void emit(FnDecl *fnDecl);
+  void emit(ClassDecl *classDecl);
+  void emit_vtable(ClassDecl *classDecl);
+  
+  void emit(Stmt *stmt, int *fp_offset);
+  void emit(StmtBlock *stmtBlock, int *fp_offset);
+  void emit(ForStmt *forStmt, int *fp_offset);
+  void emit(WhileStmt *whileStmt, int *fp_offset);
+  void emit(IfStmt *ifStmt, int *fp_offset);
+  void emit(BreakStmt *breakStmt, int *fp_offset);
+  void emit(ReturnStmt *returnStmt, int *fp_offset);
+  void emit(PrintStmt *printStmt, int *fp_offset);
+
+  Location* emit(Expr *expr, int *fp_offset);
+  Location* emit(CompoundExpr *expr, int *fp_offset);
+  Location* emit(Operator *op, Location *rhs, int *fp_offset);
+  Location* emit(Operator *op, Location *lhs, Location *rhs, int *fp_offset);
+  Location* emit(FieldAccess *expr, int *fp_offset);
+  Location* emit(ArrayAccess *expr, int *fp_offset);
+  Location* emit(NewArrayExpr *expr, int *fp_offset);
+  Location* emit(Call *expr, int *fp_offset);
+
+  char* get_function_label(FnDecl *fnDecl);
 
  public:
   explicit Semantic(Program *program);

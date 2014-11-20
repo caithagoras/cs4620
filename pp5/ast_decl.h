@@ -23,22 +23,24 @@ class Stmt;
 
 class Decl : public Node {
   friend class Semantic;
-  friend class MipsGenerator;
+  friend class Symbol;
+
  protected:
   Identifier *id;
-  
+
  public:
   Decl(Identifier *name);
   friend std::ostream& operator<<(std::ostream& out, Decl *d) { return out << d->id; }
-  
+
   virtual ~Decl() {}
 };
 
 class VarDecl : public Decl {
   friend class Semantic;
+
  protected:
   Type *type;
-  
+
  public:
   VarDecl(Identifier *name, Type *type);
 };

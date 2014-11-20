@@ -35,33 +35,33 @@
 
 class Type;
 
-class Node 
-{
-  protected:
-    yyltype *location;
-    Node *parent;
-
-  public:
-    Node(yyltype loc);
-    Node();
-    
-    yyltype *GetLocation() const  { return location; }
-    void SetParent(Node *p)  { parent = p; }
-    Node *GetParent()        { return parent; }
+class Node {
+  friend class Semantic;
+ protected:
+  yyltype *location;
+  Node *parent;
+  
+ public:
+  Node(yyltype loc);
+  Node();
+  
+  yyltype *GetLocation() const  { return location; }
+  void SetParent(Node *p)  { parent = p; }
+  Node *GetParent()        { return parent; }
+  virtual ~Node() {}
 };
    
 
-class Identifier : public Node 
-{
+class Identifier : public Node {
   friend class Semantic;
-  friend class MipsGenerator;
-  protected:
-    char *name;
-    
-  public:
-    Identifier(yyltype loc, const char *name);
-    friend std::ostream& operator<<(std::ostream& out, Identifier *id) { return out << id->name; }
-    friend bool operator==(const Type &t1, const Type &t2);
+  friend class Symbol;
+ protected:
+  char *name;
+  
+ public:
+  Identifier(yyltype loc, const char *name);
+  friend std::ostream& operator<<(std::ostream& out, Identifier *id) { return out << id->name; }
+  friend bool operator==(const Type &t1, const Type &t2);
 };
 
 
@@ -70,12 +70,9 @@ class Identifier : public Node
 // is discarded along with the states being popped, and an instance of
 // the Error class can stand in as the placeholder in the parse tree
 // when your parser can continue after an error.
-class Error : public Node
-{
-  public:
-    Error() : Node() {}
+class Error : public Node {
+ public:
+ Error() : Node() {}
 };
-
-
 
 #endif

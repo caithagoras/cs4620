@@ -22,9 +22,14 @@ void Program::CheckAndEmit() {
 }
 
 StmtBlock::StmtBlock(List<VarDecl*> *d, List<Stmt*> *s) {
-    Assert(d != NULL && s != NULL);
-    (decls=d)->SetParentAll(this);
-    (stmts=s)->SetParentAll(this);
+  Assert(d != NULL && s != NULL);
+  (decls=d)->SetParentAll(this);
+  (stmts=s)->SetParentAll(this);
+  scope = NULL;
+}
+
+void StmtBlock::set_scope(Scope *scope) {
+  this->scope = scope;
 }
 
 ConditionalStmt::ConditionalStmt(Expr *t, Stmt *b) { 

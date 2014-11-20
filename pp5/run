@@ -7,13 +7,13 @@
 #
 
 SPIM=spim
-COMPILER=dcc
+#COMPILER=dcc
 
-if [ $# -lt 1 ]; then
-  echo "Run script error: The run script takes one argument, the path to a Decaf file."
+if [ $# -lt 2 ]; then
+  echo "Run script error: The run script takes two argument, the path to a Decaf file, and the path to the executable!"
   exit 1;
 fi
-if [ ! -x $COMPILER ]; then
+if [ ! -x $2 ]; then
   echo "Run script error: Cannot find $COMPILER executable!"
   echo "(You must run this script from the directory containing your $COMPILER executable.)"
   exit 1;
@@ -24,7 +24,7 @@ if [ ! -r $1 ]; then
 fi
 
 echo "-- $COMPILER <$1 >tmp.asm"
-./$COMPILER < $1 > tmp.asm 2>tmp.errors
+$2 < $1 > tmp.asm 2>tmp.errors
 if [ $? -ne 0 -o -s tmp.errors ]; then
   echo "Run script error: errors reported from $COMPILER compiling '$1'."
   echo " "

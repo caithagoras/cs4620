@@ -1,5 +1,10 @@
-int g(){
+class A{
+  int x;
+  
+  int f() {
+    x=5;
+  }
 }
 
-int f(){
+int main(){
 }

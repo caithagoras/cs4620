@@ -1,0 +1,42 @@
+	# standard Decaf preamble 
+	  .text
+	  .align 2
+	  .globl main
+  _A.f:
+	# BeginFunc 4
+	  subu $sp, $sp, 8	# decrement sp to make space to save ra, fp
+	  sw $fp, 8($sp)	# save fp
+	  sw $ra, 4($sp)	# save ra
+	  addiu $fp, $sp, 8	# set up new fp
+	  subu $sp, $sp, 4	# decrement sp to make space for locals/temps
+	# _tmp0 = 5
+	  li $t2, 5		# load constant value 5 into $t2
+	  sw $t2, -8($fp)	# spill _tmp0 from $t2 to $fp-8
+	# *(this + 4) = _tmp0
+	  lw $t0, -8($fp)	# fill _tmp0 to $t0 from $fp-8
+	  lw $t2, 4($fp)	# fill this to $t2 from $fp+4
+	  sw $t0, 4($t2) 	# store with offset
+	# EndFunc
+	# (below handles reaching end of fn body with no explicit return)
+	  move $sp, $fp		# pop callee frame off stack
+	  lw $ra, -4($fp)	# restore saved ra
+	  lw $fp, 0($fp)	# restore saved fp
+	  jr $ra		# return from function
+	# VTable for class A
+	  .data
+	  .align 2
+	  A:		# label for class A vtable
+	  .word _A.f
+	  .text
+  main:
+	# BeginFunc 0
+	  subu $sp, $sp, 8	# decrement sp to make space to save ra, fp
+	  sw $fp, 8($sp)	# save fp
+	  sw $ra, 4($sp)	# save ra
+	  addiu $fp, $sp, 8	# set up new fp
+	# EndFunc
+	# (below handles reaching end of fn body with no explicit return)
+	  move $sp, $fp		# pop callee frame off stack
+	  lw $ra, -4($fp)	# restore saved ra
+	  lw $fp, 0($fp)	# restore saved fp
+	  jr $ra		# return from function

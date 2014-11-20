@@ -17,8 +17,9 @@
 #include "ast.h"
 
 class Decl;
-class VarDecl;
 class Expr;
+class VarDecl;
+class Scope;
 class Semantic;
   
 class Program : public Node{
@@ -44,13 +45,16 @@ class StmtBlock : public Stmt {
  protected:
   List<VarDecl*> *decls;
   List<Stmt*> *stmts;
+  Scope *scope;
     
  public:
   StmtBlock(List<VarDecl*> *variableDeclarations, List<Stmt*> *statements);
+  void set_scope(Scope *scope);
 };
 
   
 class ConditionalStmt : public Stmt {
+  friend class Semantic;
   
  protected:
   Expr *test;
@@ -62,6 +66,9 @@ class ConditionalStmt : public Stmt {
 
 class LoopStmt : public ConditionalStmt {
   friend class Semantic;
+
+ protected:
+  char *finish_label;
 
  public:
  LoopStmt(Expr *testExpr, Stmt *body)
