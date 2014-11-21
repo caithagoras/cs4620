@@ -1,4 +1,0 @@
-
-*** Failure: Assertion failed: tac.cc, line 61:
-    dst != NULL && src != NULL
-

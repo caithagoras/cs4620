@@ -35,6 +35,7 @@ class Symbol {
   explicit Symbol(Decl *d, Scope *s): decl(d), scope(s), location(NULL) {}
   void set_location_fp_relative(int offset);
   void set_location_gp_relative(int offset);
+  void set_location_class_member(int offset);
 
  protected:
   Decl *decl;
@@ -53,6 +54,8 @@ class Scope {
   Scope *parent;
   ScopeType type;
   Decl *decl;
+  
+  map<FnDecl*, int> vtable_index; // For ClassScope
 };
 
 class Semantic {
@@ -124,7 +127,9 @@ class Semantic {
   void emit(VarDecl *varDecl, bool is_global, int *offset);
   void emit(FnDecl *fnDecl);
   void emit(ClassDecl *classDecl);
-  void emit_vtable(ClassDecl *classDecl);
+
+  void init_current_class(ClassDecl *classDecl, vector<FnDecl*> &vtable, int *field_offset);
+  void emit_vtable(char *class_name, const vector<FnDecl*> &vtable);
   
   void emit(Stmt *stmt, int *fp_offset);
   void emit(StmtBlock *stmtBlock, int *fp_offset);
@@ -135,14 +140,17 @@ class Semantic {
   void emit(ReturnStmt *returnStmt, int *fp_offset);
   void emit(PrintStmt *printStmt, int *fp_offset);
 
-  Location* emit(Expr *expr, int *fp_offset);
+  Location* emit(Expr *expr, int *fp_offset, bool assignable_location);
   Location* emit(CompoundExpr *expr, int *fp_offset);
   Location* emit(Operator *op, Location *rhs, int *fp_offset);
   Location* emit(Operator *op, Location *lhs, Location *rhs, int *fp_offset);
+  Location* emit_assignment(Location *lhs, Location *rhs);
   Location* emit(FieldAccess *expr, int *fp_offset);
   Location* emit(ArrayAccess *expr, int *fp_offset);
+  Location* emit(NewExpr *expr, int *fp_offset);
   Location* emit(NewArrayExpr *expr, int *fp_offset);
   Location* emit(Call *expr, int *fp_offset);
+  Location* emit_array_length(Location *array_base, int *fp_offset);
 
   char* get_function_label(FnDecl *fnDecl);
 

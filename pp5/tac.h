@@ -35,7 +35,7 @@ class Mips;
     // variable in a function would be assigned a Location object
     // with name "num", segment fpRelative, and offset -8. 
  
-typedef enum {fpRelative, gpRelative, classMember} Segment;
+typedef enum {fpRelative, gpRelative, memoryAddr} Segment;
 
 class Location
 {
@@ -47,6 +47,7 @@ class Location
 	  
   public:
     Location(Segment seg, int offset, const char *name);
+    Location(Location *base, int offset);
 
     const char *GetName() const     { return variableName; }
     Segment GetSegment() const      { return segment; }

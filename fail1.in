@@ -1,0 +1,43 @@
+
+class C {
+  int c;
+
+  int c1(){}
+  int b3(){
+    Print(c);
+  }
+}
+
+
+class B extends C{
+  int b; 
+  
+  int b1(){
+  }
+  int b2(){
+    b=2;
+    c=9;
+    Print(b,c);
+  }
+  int b3(){
+  }
+}
+
+class A extends B{
+  int a;
+  
+  int a1() {}
+  int b2() {}
+  int a3() {
+    a=1;
+    b=2;
+    c=3;
+    Print(a,b,c);
+  }
+}
+
+
+int main(){
+  int a;
+  a = 1;
+}

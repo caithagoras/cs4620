@@ -1,6 +1,6 @@
 #!/bin/bash
 
-tests=(badlink factorial t1 t6)
+tests=(badlink badnewarr badsub factorial matrix queue stack t1 t2 t3 t4 t6 t7 t8)
 #tests=(factorial)
 
 for test in ${tests[@]}

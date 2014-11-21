@@ -40,6 +40,10 @@ void Symbol::set_location_gp_relative(int offset) {
   location = new Location(gpRelative, offset, decl->id->name);
 }
 
+void Symbol::set_location_class_member(int offset) {
+  location = new Location(NULL, offset);
+}
+
 /***** Commnon Internal ****/
 
 void Semantic::enter_scope(ScopeType type) {
@@ -250,11 +254,12 @@ void Semantic::check(ClassDecl *classDecl, bool load_only) {
       for (map<string, Symbol>::iterator it = extendsSymbol->scope->symbols.begin(); it != extendsSymbol->scope->symbols.end(); it++) {
         insert_symbol(it->first, it->second);
         FnDecl *fnDecl = dynamic_cast<FnDecl*>(it->second.decl);
+
         if (fnDecl)
           inherited_fn.insert(pair<string, FnDecl*>(it->first, fnDecl));
       }
     }
-  }
+  } 
 
   // Handle implemented interefaces
   for (int i=0; i<classDecl->implements->NumElements(); i++) {
@@ -808,10 +813,18 @@ void Semantic::emit(FnDecl *fnDecl) {
   instructions.GenLabel(label);
   free(label);
 
-  // Set Location for Parameters
-  for (int i=0; i<fnDecl->formals->NumElements(); i++) {
-    Symbol *symbol = local_lookup(fnDecl->formals->Nth(i)->id->name);
-    symbol -> set_location_fp_relative((i+1)*4);
+  // Set Location for Parameters - The parameters at fp+4 for functions, and fp+8 for methods
+  if ((void*)fnDecl->parent == (void*)program) {
+    for (int i=0; i<fnDecl->formals->NumElements(); i++) {
+      Symbol *symbol = local_lookup(fnDecl->formals->Nth(i)->id->name);
+      symbol -> set_location_fp_relative((i+1)*4);
+    }
+  }
+  else {
+    for (int i=0; i<fnDecl->formals->NumElements(); i++) {
+      Symbol *symbol = local_lookup(fnDecl->formals->Nth(i)->id->name);
+      symbol -> set_location_fp_relative((i+2)*4);
+    }
   }
 
   // Generate BeginFunc
@@ -821,7 +834,7 @@ void Semantic::emit(FnDecl *fnDecl) {
   int fp_offset = -8;
   emit(fnDecl->body, &fp_offset);
 
-  // Set Frame Size of Begin Func
+  // Set frame size of BeginFunc
   begin_func->SetFrameSize(-fp_offset-8);
   
   // Generate EndFunc
@@ -835,16 +848,62 @@ void Semantic::emit(ClassDecl *classDecl) {
   Scope *scope = local_lookup(class_name)->scope;
   enter_scope(scope);
 
+  // Initialize vtable and location for fields
+  vector<FnDecl*> vtable;
+  int field_offset = 4;
+  init_current_class(classDecl, vtable, &field_offset);
+
+  // Initialize method-to-index map
+  for (int i=0; i<vtable.size(); i++)
+    current->vtable_index.insert(pair<FnDecl*, int>(vtable[i], i));
+  
+  // Emit methods
   for (int i=0; i<classDecl->members->NumElements(); i++) {
     FnDecl *fnDecl = dynamic_cast<FnDecl*>(classDecl->members->Nth(i));
     if (fnDecl) emit(fnDecl);
   }
-  
-  emit_vtable(classDecl);
+
+  // Emit vtable
+  emit_vtable(class_name, vtable);
+
   exit_scope();
 }
 
-void Semantic::emit_vtable(ClassDecl *classDecl) {
+void Semantic::init_current_class(ClassDecl *classDecl, vector<FnDecl*> &vtable, int *field_offset) {
+  if (classDecl->extends != NULL) {
+    ClassDecl *parent_class = dynamic_cast<ClassDecl*>(lookup(root, classDecl->extends->id->name)->decl);
+    init_current_class(parent_class, vtable, field_offset);
+  }
+  for (int i=0; i<classDecl->members->NumElements(); i++) {
+    VarDecl *varDecl = dynamic_cast<VarDecl*>(classDecl->members->Nth(i));
+    FnDecl *fnDecl = dynamic_cast<FnDecl*>(classDecl->members->Nth(i));
+
+    if (varDecl) {
+      Symbol *symbol = local_lookup(varDecl->id->name);
+      symbol->set_location_class_member(*field_offset);
+      *field_offset += 4;
+    }
+    if (fnDecl) {
+      char *fn_name = fnDecl->id->name;
+      bool override = false;
+      for (int i=0; i<vtable.size(); i++)
+        if (strcmp(vtable[i]->id->name, fn_name) == 0) {
+          vtable[i] = fnDecl;
+          override = true;
+          break;
+        }
+      if (!override)
+        vtable.push_back(fnDecl);
+    }
+  }
+}
+
+void Semantic::emit_vtable(char* class_name, const vector<FnDecl*> &vtable) {
+  List<const char*> *labels = new List<const char*>();
+  for (int i=0; i<vtable.size(); i++)
+    labels->Append(get_function_label(vtable[i]));
+
+  instructions.GenVTable(class_name, labels);
 }
 
 void Semantic::emit(Stmt *stmt, int *fp_offset) {
@@ -871,8 +930,13 @@ void Semantic::emit(Stmt *stmt, int *fp_offset) {
     emit(returnStmt, fp_offset);
   else if(printStmt)
     emit(printStmt, fp_offset);
-  else if (expr)
-    emit(expr, fp_offset);
+  else if (expr) {
+    CompoundExpr *compoundExpr = dynamic_cast<CompoundExpr*>(expr);
+    if (compoundExpr && strcmp(compoundExpr->op->tokenString, "=") == 0)
+      emit(expr, fp_offset, false);
+    else
+      emit(expr, fp_offset, true);
+  }
 }
 
 void Semantic::emit(StmtBlock *stmtBlock, int *fp_offset) {
@@ -892,7 +956,7 @@ void Semantic::emit(ForStmt *forStmt, int *fp_offset) {
 
   emit(forStmt->init, fp_offset);
   instructions.GenLabel(start_label);
-  Location *location_test = emit(forStmt->test, fp_offset);
+  Location *location_test = emit(forStmt->test, fp_offset, true);
   instructions.GenIfZ(location_test, finish_label);
   emit(forStmt->body, fp_offset);
   emit(forStmt->step, fp_offset);
@@ -906,7 +970,7 @@ void Semantic::emit(WhileStmt *whileStmt, int *fp_offset) {
   whileStmt->finish_label = finish_label;
   
   instructions.GenLabel(start_label);
-  Location *location_test = emit(whileStmt->test, fp_offset);
+  Location *location_test = emit(whileStmt->test, fp_offset, true);
   instructions.GenIfZ(location_test, finish_label);
   emit(whileStmt->body, fp_offset);
   instructions.GenGoto(start_label);
@@ -914,7 +978,7 @@ void Semantic::emit(WhileStmt *whileStmt, int *fp_offset) {
 }
 
 void Semantic::emit(IfStmt *ifStmt, int *fp_offset) {
-  Location *location_test = emit(ifStmt->test, fp_offset);
+  Location *location_test = emit(ifStmt->test, fp_offset, true);
   char *l0 = instructions.NewLabel();
   char *l1;
   instructions.GenIfZ(location_test, l0);
@@ -938,13 +1002,14 @@ void Semantic::emit(BreakStmt *breakStmt, int *fp_offset) {
 }
 
 void Semantic::emit(ReturnStmt *returnStmt, int *fp_offset) {
-  Location *location = emit(returnStmt->expr, fp_offset);
+  Location *location = emit(returnStmt->expr, fp_offset, true);
   instructions.GenReturn(location);
 }
 
 void Semantic::emit(PrintStmt *printStmt, int *fp_offset) {
   for (int i=0; i<printStmt->args->NumElements(); i++) {
-    Location *location = emit(printStmt->args->Nth(i), fp_offset);
+    Location *location = emit(printStmt->args->Nth(i), fp_offset, true);
+
     const Type *type = check(printStmt->args->Nth(i));
 
     if (*type == *Type::intType)
@@ -956,50 +1021,62 @@ void Semantic::emit(PrintStmt *printStmt, int *fp_offset) {
   }
 }
 
-Location* Semantic::emit(Expr *expr, int *fp_offset) {
-  if (dynamic_cast<EmptyExpr*>(expr))
-    return NULL;
-  else if (dynamic_cast<IntConstant*>(expr))
-    return instructions.GenLoadConstant(dynamic_cast<IntConstant*>(expr)->value, fp_offset);
-  else if (dynamic_cast<DoubleConstant*>(expr))
-    return NULL;
-  else if (dynamic_cast<BoolConstant*>(expr)) 
-    return instructions.GenLoadConstant(dynamic_cast<BoolConstant*>(expr)->value ? 1 : 0, fp_offset);
-  else if (dynamic_cast<StringConstant*>(expr))
-    return instructions.GenLoadConstant(dynamic_cast<StringConstant*>(expr)->value, fp_offset);
-  else if (dynamic_cast<NullConstant*>(expr))
-    return instructions.GenLoadConstant(0, fp_offset);
-  else if (dynamic_cast<ReadIntegerExpr*>(expr))
-    return instructions.GenBuiltInCall(ReadInteger, NULL, NULL, fp_offset);
-  else if (dynamic_cast<ReadLineExpr*>(expr))
-    return instructions.GenBuiltInCall(ReadLine, NULL, NULL, fp_offset);
-  else if (dynamic_cast<CompoundExpr*>(expr))
-    return emit(dynamic_cast<CompoundExpr*>(expr), fp_offset);
-  else if (dynamic_cast<FieldAccess*>(expr))
-    return emit(dynamic_cast<FieldAccess*>(expr), fp_offset);
-  else if (dynamic_cast<ArrayAccess*>(expr))
-    return emit(dynamic_cast<ArrayAccess*>(expr), fp_offset);
-  else if (dynamic_cast<This*>(expr))
-    return NULL;
-  else if (dynamic_cast<NewExpr*>(expr))
-    return NULL;
-  else if (dynamic_cast<NewArrayExpr*>(expr))
-    return emit(dynamic_cast<NewArrayExpr*>(expr), fp_offset);
-  else if (dynamic_cast<Call*>(expr))
-    return emit(dynamic_cast<Call*>(expr), fp_offset);
+Location* Semantic::emit(Expr *expr, int *fp_offset, bool assignable_location) {
+  Location *location = NULL;
 
-  return NULL;
+  if (dynamic_cast<EmptyExpr*>(expr))
+    ;
+  else if (dynamic_cast<IntConstant*>(expr))
+    location = instructions.GenLoadConstant(dynamic_cast<IntConstant*>(expr)->value, fp_offset);
+  else if (dynamic_cast<DoubleConstant*>(expr))
+    ;
+  else if (dynamic_cast<BoolConstant*>(expr)) 
+    location = instructions.GenLoadConstant(dynamic_cast<BoolConstant*>(expr)->value ? 1 : 0, fp_offset);
+  else if (dynamic_cast<StringConstant*>(expr))
+    location = instructions.GenLoadConstant(dynamic_cast<StringConstant*>(expr)->value, fp_offset);
+  else if (dynamic_cast<NullConstant*>(expr))
+    location = instructions.GenLoadConstant(0, fp_offset);
+  else if (dynamic_cast<ReadIntegerExpr*>(expr))
+    location = instructions.GenBuiltInCall(ReadInteger, NULL, NULL, fp_offset);
+  else if (dynamic_cast<ReadLineExpr*>(expr))
+    location = instructions.GenBuiltInCall(ReadLine, NULL, NULL, fp_offset);
+  else if (dynamic_cast<CompoundExpr*>(expr))
+    location = emit(dynamic_cast<CompoundExpr*>(expr), fp_offset);
+  else if (dynamic_cast<FieldAccess*>(expr))
+    location = emit(dynamic_cast<FieldAccess*>(expr), fp_offset);
+  else if (dynamic_cast<ArrayAccess*>(expr))
+    location = emit(dynamic_cast<ArrayAccess*>(expr), fp_offset);
+  else if (dynamic_cast<This*>(expr))
+    location = instructions.ThisPtr;
+  else if (dynamic_cast<NewExpr*>(expr))
+    location = emit(dynamic_cast<NewExpr*>(expr), fp_offset);
+  else if (dynamic_cast<NewArrayExpr*>(expr))
+    location = emit(dynamic_cast<NewArrayExpr*>(expr), fp_offset);
+  else if (dynamic_cast<Call*>(expr))
+    location = emit(dynamic_cast<Call*>(expr), fp_offset);
+
+  if (assignable_location && location != NULL && location->GetSegment() == memoryAddr)
+    return instructions.GenLoad(location->GetBase(), location->GetOffset(), fp_offset);
+
+  return location;
 }
 
 Location* Semantic::emit(CompoundExpr *expr, int *fp_offset) {
   if (expr->left == NULL) {
-    Location *location_rhs = emit(expr->right, fp_offset);
+    Location *location_rhs = emit(expr->right, fp_offset, true);
     return emit(expr->op, location_rhs, fp_offset);
   }
   else {
-    Location *location_lhs = emit(expr->left, fp_offset);
-    Location *location_rhs = emit(expr->right, fp_offset);
-    return emit(expr->op, location_lhs, location_rhs, fp_offset);
+    if (!strcmp(expr->op->tokenString, "=")) {
+      Location *location_lhs = emit(expr->left, fp_offset, false);
+      Location *location_rhs = emit(expr->right, fp_offset, true);
+      return emit_assignment(location_lhs, location_rhs);
+    }
+    else {
+      Location *location_lhs = emit(expr->left, fp_offset, true);
+      Location *location_rhs = emit(expr->right, fp_offset, true);
+      return emit(expr->op, location_lhs, location_rhs, fp_offset);
+    }
   }
 }
 
@@ -1048,29 +1125,35 @@ Location* Semantic::emit(Operator *op, Location *lhs, Location *rhs, int *fp_off
     return instructions.GenBinaryOp("==", equal_op, zero, fp_offset);
   }
 
-  if (!strcmp(op->tokenString, "=")) {
-    if (lhs->GetSegment() == classMember)
-      instructions.GenStore(instructions.ThisPtr, rhs, lhs->GetOffset());
-    else
-      instructions.GenAssign(lhs, rhs);
-  }
+  assert(0);
+}
 
-  return NULL;
+Location* Semantic::emit_assignment(Location *lhs, Location *rhs) {
+  if (lhs->GetSegment() == memoryAddr)
+    instructions.GenStore(lhs->GetBase(), rhs, lhs->GetOffset());
+  else
+    instructions.GenAssign(lhs, rhs);
+  return lhs;
 }
 
 Location* Semantic::emit(FieldAccess *expr, int *fp_offset) {
-  
   if (expr->base == NULL) {
-    Symbol *symbol = lookup(expr->field->name);
-    return symbol->location;
+    Location *location = lookup(expr->field->name)->location;
+    if (location->GetSegment() == memoryAddr)
+      return new Location(instructions.ThisPtr, location->GetOffset());
+    return location;
   }
 
-  return NULL;
+  Location *base_location = emit(expr->base, fp_offset, true);
+  const NamedType *base_type = dynamic_cast<const NamedType*>(check(expr->base));
+  Scope* class_scope = lookup(root, base_type->id->name)->scope;
+  Location *member_location = lookup(class_scope, expr->field->name)->location;
+  return new Location(base_location, member_location->GetOffset());
 }
 
 Location* Semantic::emit(ArrayAccess *expr, int *fp_offset) {
-  Location *base = emit(expr->base, fp_offset);
-  Location *index = emit(expr->subscript, fp_offset);
+  Location *base = emit(expr->base, fp_offset, true);
+  Location *index = emit(expr->subscript, fp_offset, true);
 
   char *l0 = instructions.NewLabel();
   Location *zero = instructions.GenLoadConstant(0, fp_offset);
@@ -1087,13 +1170,27 @@ Location* Semantic::emit(ArrayAccess *expr, int *fp_offset) {
   Location *four = instructions.GenLoadConstant(4, fp_offset);
   Location *offset = instructions.GenBinaryOp("*", four, index, fp_offset);
   Location *address = instructions.GenBinaryOp("+", base, offset, fp_offset);
-  Location *value = instructions.GenLoad(address, 0, fp_offset);
+  Location *ref = new Location(address, 0);
   
-  return value;
+  return ref;
+}
+
+Location* Semantic::emit(NewExpr *expr, int *fp_offset) {
+  Scope* class_scope = lookup(root, expr->cType->id->name)->scope;
+  int field_count = 0;
+  for (map<string, Symbol>::iterator it = class_scope->symbols.begin(); it != class_scope->symbols.end(); it++)
+    if (dynamic_cast<VarDecl*>(it->second.decl))
+      field_count++;
+
+  Location *alloc_size = instructions.GenLoadConstant(4*(field_count+1), fp_offset);
+  Location *alloc = instructions.GenBuiltInCall(Alloc, alloc_size, NULL, fp_offset);
+  Location *vtable = instructions.GenLoadLabel(class_scope->decl->id->name, fp_offset);
+  instructions.GenStore(alloc, vtable, 0);
+  return alloc;
 }
 
 Location* Semantic::emit(NewArrayExpr *expr, int *fp_offset) {
-  Location *size = emit(expr->size, fp_offset);
+  Location *size = emit(expr->size, fp_offset, true);
 
   char *l0 = instructions.NewLabel();
   Location *zero = instructions.GenLoadConstant(0, fp_offset);
@@ -1117,21 +1214,68 @@ Location* Semantic::emit(NewArrayExpr *expr, int *fp_offset) {
 Location* Semantic::emit(Call *expr, int *fp_offset) {
   vector<Location*> actuals;
   for (int i=0; i<expr->actuals->NumElements(); i++)
-    actuals.push_back(emit(expr->actuals->Nth(i), fp_offset));
+    actuals.push_back(emit(expr->actuals->Nth(i), fp_offset, true));
 
   Location *location_return;
-
-  FnDecl *fnDecl = dynamic_cast<FnDecl*>(lookup(expr->field->name)->decl);
-  char *label = get_function_label(fnDecl);
   
   if (expr->base == NULL) {
+    FnDecl *fnDecl = dynamic_cast<FnDecl*>(lookup(expr->field->name)->decl);
+
+    // Emit function call
+    if ((void*)fnDecl->parent == (void*)program) {
+      for (int i=actuals.size()-1; i>=0; i--)
+        instructions.GenPushParam(actuals[i]);
+      location_return = instructions.GenLCall(get_function_label(fnDecl), *fnDecl->returnType != *Type::voidType, fp_offset);
+      instructions.GenPopParams(4*actuals.size());
+    }
+    // Emit method call with implicit base
+    else {
+      Location *base_location = instructions.ThisPtr;
+      
+      Scope* class_scope = lookup(root, dynamic_cast<ClassDecl*>(fnDecl->parent)->id->name)->scope;
+      FnDecl *method = dynamic_cast<FnDecl*>(lookup(class_scope, expr->field->name)->decl);
+
+      int fn_index = class_scope->vtable_index.find(method)->second;
+      Location *vtable = instructions.GenLoad(base_location, 0, fp_offset);
+      Location *fn_addr = instructions.GenLoad(vtable, fn_index*4, fp_offset);
+    
+      for (int i=actuals.size()-1; i>=0; i--)
+        instructions.GenPushParam(actuals[i]);
+      instructions.GenPushParam(base_location);
+      location_return = instructions.GenACall(fn_addr, *method->returnType != *Type::voidType, fp_offset);
+      instructions.GenPopParams(4*actuals.size()+4);
+    }
+  }
+  else {
+    Location *base_location = emit(expr->base, fp_offset, true);
+    const Type* base_type = check(expr->base);
+
+    // Check if the function call is array.length()
+    if (dynamic_cast<const ArrayType*>(base_type))
+      return emit_array_length(base_location, fp_offset);
+
+    // Emit method call
+    const NamedType *base_named_type = dynamic_cast<const NamedType*>(base_type);
+    Scope* class_scope = lookup(root, base_named_type->id->name)->scope;
+    FnDecl *method = dynamic_cast<FnDecl*>(lookup(class_scope, expr->field->name)->decl);
+
+    int fn_index = class_scope->vtable_index.find(method)->second;
+    Location *vtable = instructions.GenLoad(base_location, 0, fp_offset);
+    Location *fn_addr = instructions.GenLoad(vtable, fn_index*4, fp_offset);
+    
     for (int i=actuals.size()-1; i>=0; i--)
       instructions.GenPushParam(actuals[i]);
-    location_return = instructions.GenLCall(label, *fnDecl->returnType != *Type::voidType, fp_offset);
-    instructions.GenPopParams(4*actuals.size());
+    instructions.GenPushParam(base_location);
+    location_return = instructions.GenACall(fn_addr, *method->returnType != *Type::voidType, fp_offset);
+    instructions.GenPopParams(4*actuals.size()+4);
   }
 
   return location_return;
+}
+
+Location* Semantic::emit_array_length(Location *array_base, int *fp_offset) {
+  Location *array_length = instructions.GenLoad(array_base, -4, fp_offset);
+  return array_length;
 }
 
 /***** External *****/
