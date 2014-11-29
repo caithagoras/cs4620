@@ -47,7 +47,7 @@ class Scope {
   friend class Semantic;
 
  public:
-  Scope(Scope *parent, ScopeType type, Decl *decl = NULL);
+  Scope(Scope *parent, ScopeType type, Decl *decl);
 
  protected:
   map<string, Symbol> symbols;
@@ -55,7 +55,9 @@ class Scope {
   ScopeType type;
   Decl *decl;
   
-  map<FnDecl*, int> vtable_index; // For ClassScope
+  // For ClassScope
+  vector<FnDecl*> vtable; 
+  map<FnDecl*, int> vtable_index;
 };
 
 class Semantic {
@@ -77,32 +79,19 @@ class Semantic {
   void enter_scope(Scope *scope);
   void exit_scope();
   void insert_symbol(string ident, Symbol symbol);
-  void override(string ident, FnDecl* fnDecl);
   Symbol* lookup(Scope *scope, string s) const;
   Symbol* lookup(string s) const;
   Symbol* local_lookup(string s) const;
 
   // Semantic Analyzer Internal
-
-  void build(Program* program);
-  void build(Decl *decl);
-
   void build_id_to_type_map();
 
-  void check(Program *program);
-  void check(VarDecl *varDecl, bool symbol_only, bool suppress_dup_error);
-  void check(FnDecl *fnDecl, bool symbol_only, bool suppress_dup_error);
-  void check(ClassDecl *classDecl, bool load_only);
-  void check(InterfaceDecl *interfaceDecl);
-
-  void check(Stmt *stmt);
-  void check(StmtBlock *stmtBlock);
-  void check(ForStmt *forStmt);
-  void check(WhileStmt *whileStmt);
-  void check(IfStmt *ifStmt);
-  void check(BreakStmt *breakStmt);
-  void check(ReturnStmt *returnStmt);
-  void check(PrintStmt *printStmt);
+  void build(Program* program);
+  void build(VarDecl *varDecl);
+  void build(FnDecl *fnDecl);
+  void build(ClassDecl *classDecl);
+  void build(Stmt *stmt);
+  void build(StmtBlock *stmtBlock);
 
   const Type* check(Expr *expr);
   const Type* check(CompoundExpr *expr);
@@ -128,7 +117,7 @@ class Semantic {
   void emit(FnDecl *fnDecl);
   void emit(ClassDecl *classDecl);
 
-  void init_current_class(ClassDecl *classDecl, vector<FnDecl*> &vtable, int *field_offset);
+  void init_current_class(ClassDecl *classDecl, int *field_offset);
   void emit_vtable(char *class_name, const vector<FnDecl*> &vtable);
   
   void emit(Stmt *stmt, int *fp_offset);

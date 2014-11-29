@@ -71,20 +71,11 @@ void Semantic::insert_symbol(string ident, Symbol symbol) {
   current->symbols.insert(pair<string, Symbol>(ident, symbol));
 }
 
-void Semantic::override(string ident, FnDecl* fnDecl) {
-  assert(current->symbols.count(ident));
-  Symbol symbol = current->symbols.find(ident)->second;
-  assert(dynamic_cast<FnDecl*>(symbol.decl));
-  current->symbols.erase(ident);
-  Scope *scope = new Scope(current, fnScope, fnDecl);
-  insert_symbol(ident, Symbol(fnDecl, scope));
-}
-
 Symbol* Semantic::lookup(Scope* scope, string s) const {
   if (scope->symbols.count(s) == 0)
     return NULL;
-  else
-    return &(scope->symbols.find(s)->second);
+  
+  return &(scope->symbols.find(s)->second);
 }
 
 Symbol* Semantic::lookup(string s) const {
@@ -104,47 +95,6 @@ Symbol* Semantic::local_lookup(string s) const {
 
 /***** Semantic Analyzer Internal *****/
 
-void Semantic::build(Program *program){
-  enter_scope(ScopeType(rootScope));
-  root=current;
-  for (int i=0; i<program->decls->NumElements(); i++){
-    Decl *decl = program->decls->Nth(i);
-    build(decl);
-  }
-  exit_scope();
-}
-
-void Semantic::build(Decl *decl){
-  VarDecl *varDecl = dynamic_cast<VarDecl*>(decl);
-  FnDecl *fnDecl = dynamic_cast<FnDecl*>(decl);
-  ClassDecl *classDecl = dynamic_cast<ClassDecl*>(decl);
-  InterfaceDecl *interfaceDecl =dynamic_cast<InterfaceDecl*>(decl);
-  
-  string name(decl->id->name);
-  const Symbol *declared = local_lookup(name);
-  bool conflict = true;
-  if (declared)
-    ReportError::DeclConflict(decl, declared->decl);
-  else
-    conflict = false;
-
-  if (varDecl) {
-    if (!conflict) insert_symbol(name, Symbol(decl));
-  }
-  else if (fnDecl) {
-    Scope *scope = new Scope(current, ScopeType(fnScope), fnDecl);
-    if (!conflict) insert_symbol(name, Symbol(decl, scope));
-  }
-  else if (classDecl) {
-    Scope *scope = new Scope(current, ScopeType(classScope), classDecl);
-    if (!conflict) insert_symbol(name, Symbol(decl, scope));
-  }
-  else if (interfaceDecl) {
-    Scope *scope = new Scope(current, ScopeType(interfaceScope), interfaceDecl);
-    if (!conflict) insert_symbol(name, Symbol(decl, scope));
-  }
-}
-
 void Semantic::build_id_to_type_map() {
   for (map<string, Symbol>::iterator it = root->symbols.begin(); it != root->symbols.end(); it++) {
     ClassDecl *classDecl = dynamic_cast<ClassDecl*>(it->second.decl);
@@ -155,298 +105,126 @@ void Semantic::build_id_to_type_map() {
   }
 }
 
-void Semantic::check(Program *program){
-  enter_scope(root);
+void Semantic::build(Program *program) {
+  enter_scope(ScopeType(rootScope));
+  root=current;
   for (int i=0; i<program->decls->NumElements(); i++){
     Decl *decl = program->decls->Nth(i);
     VarDecl *varDecl = dynamic_cast<VarDecl*>(decl);
     FnDecl *fnDecl = dynamic_cast<FnDecl*>(decl);
     ClassDecl *classDecl = dynamic_cast<ClassDecl*>(decl);
-    InterfaceDecl *interfaceDecl =dynamic_cast<InterfaceDecl*>(decl);
     
     if (varDecl)
-      check(varDecl, false, true);
+      build(varDecl);
     else if (fnDecl)
-      check(fnDecl, false, true);
+      build(fnDecl);
     else if (classDecl)
-      check(classDecl, false);
-    else if (interfaceDecl)
-      check(interfaceDecl);
+      build(classDecl);
   }
   exit_scope();
 }
 
-void Semantic::check(VarDecl *varDecl, bool symbol_only, bool suppress_dup_error){
-  string name(varDecl->id->name);
-  if (local_lookup(name) == NULL)
-    insert_symbol(name, Symbol(varDecl));
-  
-  const Symbol *declared = local_lookup(name);
-  if (varDecl != declared->decl && !suppress_dup_error)
-    ReportError::DeclConflict(varDecl, declared->decl);
-
-  if (symbol_only) return;
-
-  // check named variable type
-  if (has_undefined_named_type(varDecl->type))
-    varDecl->type = Type::errorType;
+void Semantic::build(VarDecl *varDecl) {
+  insert_symbol(varDecl->id->name, Symbol(varDecl));
 }
 
-void Semantic::check(FnDecl *fnDecl, bool symbol_only, bool suppress_dup_error){
-  string name(fnDecl->id->name);
-  if (local_lookup(name) == NULL){
-    Scope *scope = new Scope(current, ScopeType(fnScope), fnDecl);
-    insert_symbol(name, Symbol(fnDecl, scope));
-  }
+void Semantic::build(FnDecl *fnDecl) {
+  Scope *scope = new Scope(current, ScopeType(fnScope), fnDecl);
+  insert_symbol(fnDecl->id->name, Symbol(fnDecl, scope));
+  enter_scope(scope);
 
-  const Symbol *declared = local_lookup(name);
-  if (fnDecl != declared->decl && !suppress_dup_error)
-    ReportError::DeclConflict(fnDecl, declared->decl);
-
-  if (symbol_only) return;
-  
-  if (fnDecl == declared->decl)
-    enter_scope(declared->scope);
-  else
-    enter_scope(ScopeType(fnScope), fnDecl);
-
-  // check return type
-  if (has_undefined_named_type(fnDecl->returnType))
-    fnDecl->returnType = Type::errorType;
-
-  // check parameter list
+  // Build Parameters
   for (int i=0; i<fnDecl->formals->NumElements(); i++)
-    check(dynamic_cast<VarDecl*>(fnDecl->formals->Nth(i)), true, false);
-  for (int i=0; i<fnDecl->formals->NumElements(); i++)
-    check(dynamic_cast<VarDecl*>(fnDecl->formals->Nth(i)), false, true);
+    build(fnDecl->formals->Nth(i));
 
-  // check statement
-  if (fnDecl->body != NULL)
-    check(dynamic_cast<StmtBlock*>(fnDecl->body));
+  // Build Funcition Body
+  build(fnDecl->body);
 
   exit_scope();
 }
 
-void Semantic::check(ClassDecl *classDecl, bool load_only) {
-  bool need_to_load = !loaded.count(classDecl);
-  if (!need_to_load && load_only) return;
-  loaded.insert(classDecl);
+void Semantic::build(ClassDecl *classDecl) {
+  Scope *scope = new Scope(current, ScopeType(classScope), classDecl);
+  insert_symbol(classDecl->id->name, Symbol(classDecl, scope));
+  enter_scope(scope);
 
-  const Symbol *declared = local_lookup(classDecl->id->name);
-  if (classDecl == declared->decl)
-    enter_scope(declared->scope);
-  else
-    enter_scope(ScopeType(classScope), classDecl);
+  vector<ClassDecl*> classes;
+  ClassDecl *c = classDecl;
 
-  map<string, FnDecl*> inherited_fn;
-  // Handle inherited class
-  if (classDecl->extends != NULL) {
-    const Symbol *extendsSymbol = lookup(classDecl->extends->id->name);
-    if (extendsSymbol == NULL || dynamic_cast<ClassDecl*>(extendsSymbol->decl) == NULL) {
-      if (!load_only)
-        ReportError::IdentifierNotDeclared(classDecl->extends->id, reasonT(LookingForClass));
-    }
-    else {
-      Scope *saved = current;
-      enter_scope(root);
-      check(dynamic_cast<ClassDecl*>(extendsSymbol->decl), true);
-      enter_scope(saved);
-      for (map<string, Symbol>::iterator it = extendsSymbol->scope->symbols.begin(); it != extendsSymbol->scope->symbols.end(); it++) {
-        insert_symbol(it->first, it->second);
-        FnDecl *fnDecl = dynamic_cast<FnDecl*>(it->second.decl);
-
-        if (fnDecl)
-          inherited_fn.insert(pair<string, FnDecl*>(it->first, fnDecl));
-      }
-    }
-  } 
-
-  // Handle implemented interefaces
-  for (int i=0; i<classDecl->implements->NumElements(); i++) {
-    const Symbol *implementsSymbol = lookup(classDecl->implements->Nth(i)->id->name);
-    if (implementsSymbol == NULL || dynamic_cast<InterfaceDecl*>(implementsSymbol->decl) == NULL) {
-      if (!load_only)
-        ReportError::IdentifierNotDeclared(classDecl->implements->Nth(i)->id, reasonT(LookingForInterface));
-    }
-    else {
-      Scope *saved = current;
-      enter_scope(root);
-      check(dynamic_cast<InterfaceDecl*>(implementsSymbol->decl));
-      enter_scope(saved);
-      for (map<string, Symbol>::iterator it = implementsSymbol->scope->symbols.begin(); it != implementsSymbol->scope->symbols.end(); it++) {
-        insert_symbol(it->first, it->second);
-        inherited_fn.insert(pair<string, FnDecl*>(it->first, static_cast<FnDecl*>(it->second.decl)));
-      }
-    }
-  }
-
-  // Add declartions to symbol table if not done yet 
-  if (need_to_load)
-    for (int i=0; i<classDecl->members->NumElements(); i++) {
-      VarDecl *varDecl = dynamic_cast<VarDecl*>(classDecl->members->Nth(i));
-      FnDecl *fnDecl = dynamic_cast<FnDecl*>(classDecl->members->Nth(i));
-      if (varDecl)
-        check(varDecl, true, false);
-      else if (fnDecl) {
-        if (inherited_fn.count(fnDecl->id->name)) {
-          if (is_matched_prototype(fnDecl, inherited_fn.find(fnDecl->id->name)->second))
-            override(fnDecl->id->name, fnDecl);
-          else
-            ReportError::OverrideMismatch(fnDecl);
-        }
-        else
-          check(fnDecl, true, false);
-      }
-    }
-  
-  // load-only checks ends
-  if (load_only) {
-    exit_scope();
-    return;
-  }
-
-  // Check each declartions for semantic errors
-  for (int i=0; i<classDecl->members->NumElements(); i++) {
-    VarDecl *varDecl = dynamic_cast<VarDecl*>(classDecl->members->Nth(i));
-    FnDecl *fnDecl = dynamic_cast<FnDecl*>(classDecl->members->Nth(i));
-    if (varDecl)
-      check(varDecl, false, true);
-    else if (fnDecl)
-      check(fnDecl, false, true);
-  }
-
-  // Check if interfaces implemented
-  for (int i=0; i<classDecl->implements->NumElements(); i++) {
-    string interface_name(classDecl->implements->Nth(i)->id->name);
-    const Symbol *implementsSymbol = lookup(interface_name);
-    if (implementsSymbol == NULL || dynamic_cast<InterfaceDecl*>(implementsSymbol->decl) == NULL)
-      continue;
-
-    for (map<string, Symbol>::iterator it = implementsSymbol->scope->symbols.begin(); it != implementsSymbol->scope->symbols.end(); it++) {
-      const Symbol* actual_fn_symbol = local_lookup(it->first);
-      FnDecl *actual_fn = dynamic_cast<FnDecl*>(actual_fn_symbol->decl);
-      if (actual_fn->body == NULL) {
-        ReportError::InterfaceNotImplemented(classDecl, classDecl->implements->Nth(i));
+  while (true) {
+    classes.push_back(c);
+    if (c->extends == NULL) break;
+    for (int i=0; i<program->decls->NumElements(); i++)
+      if (!strcmp(program->decls->Nth(i)->id->name, c->extends->id->name)) {
+        c = dynamic_cast<ClassDecl*>(program->decls->Nth(i));
         break;
       }
+  }
+
+  for (int i=classes.size()-1; i>=0; i--) {
+    c = classes[i];
+    for (int j=0; j<c->members->NumElements(); j++) {
+      VarDecl *varDecl = dynamic_cast<VarDecl*>(c->members->Nth(j));
+      FnDecl *fnDecl = dynamic_cast<FnDecl*>(c->members->Nth(j));
+      
+      if (varDecl)
+        build(varDecl);
+      else if (fnDecl) {
+        char *fn_name = fnDecl->id->name;
+
+        // Update Symbol Table
+        Symbol* symbol = local_lookup(fn_name);
+        if (symbol != NULL)
+          current->symbols.erase(fn_name);
+        build(fnDecl);
+
+        // Update vtable
+        bool override = false;
+        for (int k=0; k<current->vtable.size(); k++)
+          if (!strcmp(current->vtable[k]->id->name, fn_name)) {
+            current->vtable[k] = fnDecl;
+            override = true;
+            break;
+          }
+        if (!override)
+          current->vtable.push_back(fnDecl);
+      } 
     }
   }
 
+  // Initialize method-to-index map
+  for (int i=0; i<current->vtable.size(); i++)
+    current->vtable_index.insert(pair<FnDecl*, int>(current->vtable[i], i));
+  
   exit_scope();
 }
 
-void Semantic::check(InterfaceDecl *interfaceDecl){
-  if (loaded.count(interfaceDecl)) return;
-
-  const Symbol *declared = local_lookup(interfaceDecl->id->name);
-  if (interfaceDecl == declared->decl)
-    enter_scope(declared->scope);
-  else
-    enter_scope(ScopeType(interfaceScope), interfaceDecl);
-
-  for (int i=0; i<interfaceDecl->members->NumElements(); i++){
-    FnDecl *member = dynamic_cast<FnDecl*>(interfaceDecl->members->Nth(i));
-    const Symbol *fnSymbol = local_lookup(member->id->name);
-    if (fnSymbol)
-      ReportError::DeclConflict(member, fnSymbol->decl);
-    else
-      insert_symbol(member->id->name, Symbol(member));
-  }
-
-  exit_scope();
-  loaded.insert(interfaceDecl);
-}
-
-void Semantic::check(Stmt *stmt) {
+void Semantic::build(Stmt *stmt) {
   StmtBlock *stmtBlock = dynamic_cast<StmtBlock*>(stmt);
-  ForStmt *forStmt = dynamic_cast<ForStmt*>(stmt);
-  WhileStmt *whileStmt = dynamic_cast<WhileStmt*>(stmt);
+  LoopStmt *loopStmt = dynamic_cast<LoopStmt*>(stmt);
   IfStmt *ifStmt = dynamic_cast<IfStmt*>(stmt);
-  BreakStmt *breakStmt = dynamic_cast<BreakStmt*>(stmt);
-  ReturnStmt *returnStmt = dynamic_cast<ReturnStmt*>(stmt);
-  PrintStmt *printStmt = dynamic_cast<PrintStmt*>(stmt);
-  Expr *expr = dynamic_cast<Expr*>(stmt);
 
   if (stmtBlock)
-    check(stmtBlock);
-  else if (forStmt)
-    check(forStmt);
-  else if (whileStmt)
-    check(whileStmt);
-  else if (ifStmt)
-    check(ifStmt);
-  else if (breakStmt)
-    check(breakStmt);
-  else if (returnStmt)
-    check(returnStmt);
-  else if(printStmt)
-    check(printStmt);
-  else if(expr)
-    check(expr);
-}
-
-void Semantic::check(StmtBlock *stmtBlock) {
-  enter_scope(ScopeType(blockScope));
-  stmtBlock->set_scope(current);
-  for (int i=0; i<stmtBlock->decls->NumElements(); i++)
-    check(stmtBlock->decls->Nth(i), true, false);
-  for (int i=0; i<stmtBlock->decls->NumElements(); i++)
-    check(stmtBlock->decls->Nth(i), false, true);
-  for (int i=0; i<stmtBlock->stmts->NumElements(); i++)
-    check(stmtBlock->stmts->Nth(i));
-  exit_scope();
-}
-
-void Semantic::check(ForStmt *forStmt) {
-  check(forStmt->init);
-  const Type* test_type = check(forStmt->test);
-  if (*test_type != *Type::boolType && *test_type != *Type::errorType)
-    ReportError::TestNotBoolean(forStmt->test);
-  check(forStmt->step);
-  check(forStmt->body);
-}
-
-void Semantic::check(WhileStmt *whileStmt) {
-  const Type* test_type = check(whileStmt->test);
-  if (*test_type != *Type::boolType && *test_type != *Type::errorType)
-    ReportError::TestNotBoolean(whileStmt->test);
-  check(whileStmt->body);
-}
-
-void Semantic::check(IfStmt *ifStmt) {
-  const Type* test_type = check(ifStmt->test);
-  if (*test_type != *Type::boolType && *test_type != *Type::errorType)
-    ReportError::TestNotBoolean(ifStmt->test);
-  check(ifStmt->body);
-  if (ifStmt->elseBody != NULL)
-    check(ifStmt->elseBody);
-}
-
-void Semantic::check(BreakStmt *breakStmt) {
-  Node* p = breakStmt->parent;
-  while ((void*)p != (void*)program && !dynamic_cast<LoopStmt*>(p))
-    p = p->parent;
-  if (!dynamic_cast<LoopStmt*>(p))
-    ReportError::BreakOutsideLoop(breakStmt);
-}
-
-void Semantic::check(ReturnStmt *returnStmt) {
-  const Type *actual_return_type = check(returnStmt->expr);
-  Scope *p = current;
-  while (p->type != ScopeType(fnScope))
-    p = p->parent;
-  Type* expected_return_type = dynamic_cast<FnDecl*>(p->decl)->returnType;
-  if (check_compatibility(expected_return_type, actual_return_type)) return;
-  if (is_compatible_inheritance(expected_return_type, actual_return_type)) return;
-  ReportError::ReturnMismatch(returnStmt, actual_return_type, expected_return_type);
-}
-
-void Semantic::check(PrintStmt *printStmt) {
-  for (int i=0; i<printStmt->args->NumElements(); i++) {
-    const Type* arg_type = check(printStmt->args->Nth(i));
-    if (*arg_type != *Type::intType && *arg_type != *Type::boolType && *arg_type != *Type::stringType && *arg_type != *Type::errorType)
-      ReportError::PrintArgMismatch(printStmt->args->Nth(i), i+1, arg_type);
+    build(stmtBlock);
+  else if (loopStmt)
+    build(loopStmt->body);
+  else if (ifStmt) {
+    build(ifStmt->body);
+    build(ifStmt->elseBody);
   }
+}
+
+void Semantic::build(StmtBlock *stmtBlock) {
+  enter_scope(ScopeType(blockScope));
+  stmtBlock->scope = current;
+  
+  for (int i=0; i<stmtBlock->decls->NumElements(); i++)
+    build(stmtBlock->decls->Nth(i));
+  
+  for (int i=0; i<stmtBlock->stmts->NumElements(); i++)
+    build(stmtBlock->stmts->Nth(i));
+
+  exit_scope();
 }
 
 const Type* Semantic::check(Expr *expr) {
@@ -848,14 +626,9 @@ void Semantic::emit(ClassDecl *classDecl) {
   enter_scope(scope);
 
   // Initialize vtable and location for fields
-  vector<FnDecl*> vtable;
   int field_offset = 4;
-  init_current_class(classDecl, vtable, &field_offset);
+  init_current_class(classDecl, &field_offset);
 
-  // Initialize method-to-index map
-  for (int i=0; i<vtable.size(); i++)
-    current->vtable_index.insert(pair<FnDecl*, int>(vtable[i], i));
-  
   // Emit methods
   for (int i=0; i<classDecl->members->NumElements(); i++) {
     FnDecl *fnDecl = dynamic_cast<FnDecl*>(classDecl->members->Nth(i));
@@ -863,15 +636,15 @@ void Semantic::emit(ClassDecl *classDecl) {
   }
 
   // Emit vtable
-  emit_vtable(class_name, vtable);
+  emit_vtable(class_name, current->vtable);
 
   exit_scope();
 }
 
-void Semantic::init_current_class(ClassDecl *classDecl, vector<FnDecl*> &vtable, int *field_offset) {
+void Semantic::init_current_class(ClassDecl *classDecl, int *field_offset) {
   if (classDecl->extends != NULL) {
     ClassDecl *parent_class = dynamic_cast<ClassDecl*>(lookup(root, classDecl->extends->id->name)->decl);
-    init_current_class(parent_class, vtable, field_offset);
+    init_current_class(parent_class, field_offset);
   }
   for (int i=0; i<classDecl->members->NumElements(); i++) {
     VarDecl *varDecl = dynamic_cast<VarDecl*>(classDecl->members->Nth(i));
@@ -881,18 +654,6 @@ void Semantic::init_current_class(ClassDecl *classDecl, vector<FnDecl*> &vtable,
       Symbol *symbol = local_lookup(varDecl->id->name);
       symbol->set_location_class_member(*field_offset);
       *field_offset += 4;
-    }
-    if (fnDecl) {
-      char *fn_name = fnDecl->id->name;
-      bool override = false;
-      for (int i=0; i<vtable.size(); i++)
-        if (strcmp(vtable[i]->id->name, fn_name) == 0) {
-          vtable[i] = fnDecl;
-          override = true;
-          break;
-        }
-      if (!override)
-        vtable.push_back(fnDecl);
     }
   }
 }
@@ -940,6 +701,7 @@ void Semantic::emit(Stmt *stmt, int *fp_offset) {
 }
 
 void Semantic::emit(StmtBlock *stmtBlock, int *fp_offset) {
+  stmtBlock->scope->parent = current;
   enter_scope(stmtBlock->scope);
   for (int i=0; i<stmtBlock->decls->NumElements(); i++) {
     emit(stmtBlock->decls->Nth(i), false, fp_offset);
@@ -1306,7 +1068,6 @@ Semantic::Semantic(Program *program) {
 void Semantic::analyze() {
   build(program);
   build_id_to_type_map();
-  check(program);
 }
 
 void Semantic::generate() {
