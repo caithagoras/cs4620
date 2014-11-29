@@ -811,7 +811,6 @@ void Semantic::emit(FnDecl *fnDecl) {
   // Generate Label
   char *label = get_function_label(fnDecl);
   instructions.GenLabel(label);
-  free(label);
 
   // Set Location for Parameters - The parameters at fp+4 for functions, and fp+8 for methods
   if ((void*)fnDecl->parent == (void*)program) {
@@ -900,8 +899,9 @@ void Semantic::init_current_class(ClassDecl *classDecl, vector<FnDecl*> &vtable,
 
 void Semantic::emit_vtable(char* class_name, const vector<FnDecl*> &vtable) {
   List<const char*> *labels = new List<const char*>();
-  for (int i=0; i<vtable.size(); i++)
+  for (int i=0; i<vtable.size(); i++) {
     labels->Append(get_function_label(vtable[i]));
+  }
 
   instructions.GenVTable(class_name, labels);
 }
@@ -1067,16 +1067,10 @@ Location* Semantic::emit(CompoundExpr *expr, int *fp_offset) {
     return emit(expr->op, location_rhs, fp_offset);
   }
   else {
-    if (!strcmp(expr->op->tokenString, "=")) {
-      Location *location_lhs = emit(expr->left, fp_offset, false);
-      Location *location_rhs = emit(expr->right, fp_offset, true);
-      return emit_assignment(location_lhs, location_rhs);
-    }
-    else {
-      Location *location_lhs = emit(expr->left, fp_offset, true);
-      Location *location_rhs = emit(expr->right, fp_offset, true);
-      return emit(expr->op, location_lhs, location_rhs, fp_offset);
-    }
+    if (!strcmp(expr->op->tokenString, "="))
+      return emit_assignment(expr->left, expr->right, fp_offset);
+    else
+      return emit(expr->op, expr->left, expr->right, fp_offset);
   }
 }
 
@@ -1092,14 +1086,16 @@ Location* Semantic::emit(Operator *op, Location *rhs, int *fp_offset) {
   return NULL;
 }
 
-Location* Semantic::emit(Operator *op, Location *lhs, Location *rhs, int *fp_offset) {
+Location* Semantic::emit(Operator *op, Expr *left, Expr *right, int *fp_offset) {
+  Location *lhs = emit(left, fp_offset, true);
+  Location *rhs = emit(right, fp_offset, true);
+
   if (!strcmp(op->tokenString, "+")
       || !strcmp(op->tokenString, "-")
       || !strcmp(op->tokenString, "*")
       || !strcmp(op->tokenString, "/")
       || !strcmp(op->tokenString, "%")
       || !strcmp(op->tokenString, "<")
-      || !strcmp(op->tokenString, "==")
       || !strcmp(op->tokenString, "&&")
       || !strcmp(op->tokenString, "||"))
     return instructions.GenBinaryOp(op->tokenString, lhs, rhs, fp_offset);
@@ -1119,8 +1115,21 @@ Location* Semantic::emit(Operator *op, Location *lhs, Location *rhs, int *fp_off
     return instructions.GenBinaryOp("||", less_than_op, equal_op, fp_offset);
   }
 
+  if (!strcmp(op->tokenString, "==")) {
+    const Type *type = check(left);
+    if (*type == *Type::stringType)
+      return instructions.GenBuiltInCall(StringEqual, lhs, rhs, fp_offset);
+    else
+      return instructions.GenBinaryOp("==", lhs, rhs, fp_offset);
+  }
+
   if (!strcmp(op->tokenString, "!=")) {
-    Location *equal_op = instructions.GenBinaryOp("==", lhs, rhs, fp_offset);
+    Location *equal_op;
+    const Type *type = check(left);
+    if (*type == *Type::stringType)
+      equal_op = instructions.GenBuiltInCall(StringEqual, lhs, rhs, fp_offset);
+    else 
+      equal_op = instructions.GenBinaryOp("==", lhs, rhs, fp_offset);
     Location *zero = instructions.GenLoadConstant(0, fp_offset);
     return instructions.GenBinaryOp("==", equal_op, zero, fp_offset);
   }
@@ -1128,7 +1137,10 @@ Location* Semantic::emit(Operator *op, Location *lhs, Location *rhs, int *fp_off
   assert(0);
 }
 
-Location* Semantic::emit_assignment(Location *lhs, Location *rhs) {
+Location* Semantic::emit_assignment(Expr *left, Expr *right, int *fp_offset) {
+  Location *lhs = emit(left, fp_offset, false);
+  Location *rhs = emit(right, fp_offset, true);
+
   if (lhs->GetSegment() == memoryAddr)
     instructions.GenStore(lhs->GetBase(), rhs, lhs->GetOffset());
   else
@@ -1311,13 +1323,13 @@ char* Semantic::get_function_label(FnDecl *fnDecl) {
     if (strcmp(fn_name, "main") == 0)
       label = strdup(fn_name);
     else {
-      label = (char*)malloc(sizeof(char)*(strlen(fn_name)+1));
+      label = (char*)malloc(sizeof(char)*(strlen(fn_name)+2));
       sprintf(label, "_%s", fn_name);
     }
   }
   else {
     char *class_name = dynamic_cast<ClassDecl*>(fnDecl->parent)->id->name;
-    label = (char*)malloc(sizeof(char)*(strlen(fn_name)+strlen(class_name)+2));    
+    label = (char*)malloc(sizeof(char)*(strlen(fn_name)+strlen(class_name)+3));    
     sprintf(label, "_%s.%s", class_name, fn_name);
   }
 

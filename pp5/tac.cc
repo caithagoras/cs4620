@@ -2,7 +2,7 @@
  * ------------
  * Implementation of Location class and Instruction class/subclasses.
  */
-  
+
 #include "tac.h"
 #include "mips.h"
 #include <cstring>
@@ -114,7 +114,7 @@ void BinaryOp::EmitSpecific(Mips *mips) {
   mips->EmitBinaryOp(code, dst, op1, op2);
 }
 
-Label::Label(const char *l) : label(strdup(l)) {
+Label::Label(const char *l) : label(strdup(l)){
   Assert(label != NULL);
   *printed = '\0';
 }

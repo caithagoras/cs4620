@@ -143,8 +143,8 @@ class Semantic {
   Location* emit(Expr *expr, int *fp_offset, bool assignable_location);
   Location* emit(CompoundExpr *expr, int *fp_offset);
   Location* emit(Operator *op, Location *rhs, int *fp_offset);
-  Location* emit(Operator *op, Location *lhs, Location *rhs, int *fp_offset);
-  Location* emit_assignment(Location *lhs, Location *rhs);
+  Location* emit(Operator *op, Expr *left, Expr *right, int *fp_offset);
+  Location* emit_assignment(Expr *left, Expr *right, int *fp_offset);
   Location* emit(FieldAccess *expr, int *fp_offset);
   Location* emit(ArrayAccess *expr, int *fp_offset);
   Location* emit(NewExpr *expr, int *fp_offset);

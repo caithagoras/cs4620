@@ -6,6 +6,7 @@
  */
 
 #include <iostream>
+using namespace std;
 
 #include "codegen.h"
 #include <string.h>
